@@ -1,17 +1,26 @@
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Layout from "./components/layout/Layout";
-import Dashboard from "./pages/Dashboard";
-import Ranking from "./pages/Ranking";
-import GameDetail from "./pages/GameDetail";
-import Potential from "./pages/Potential";
-import AIAnalysis from "./pages/AIAnalysis";
 import { queryClient } from "./lib/query-client";
 import {
   fetchDashboard,
   fetchPotentialScores,
   fetchBreakoutGames,
 } from "./services/api";
+
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const Ranking = lazy(() => import("./pages/Ranking"));
+const GameDetail = lazy(() => import("./pages/GameDetail"));
+const Potential = lazy(() => import("./pages/Potential"));
+const AIAnalysis = lazy(() => import("./pages/AIAnalysis"));
+
+function PageLoader() {
+  return (
+    <div className="flex items-center justify-center h-64">
+      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
+    </div>
+  );
+}
 
 function usePrefetch() {
   useEffect(() => {
@@ -35,15 +44,17 @@ export default function App() {
 
   return (
     <BrowserRouter>
-      <Routes>
-        <Route element={<Layout />}>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/ranking" element={<Ranking />} />
-          <Route path="/game/:id" element={<GameDetail />} />
-          <Route path="/potential" element={<Potential />} />
-          <Route path="/ai-analysis" element={<AIAnalysis />} />
-        </Route>
-      </Routes>
+      <Suspense fallback={<PageLoader />}>
+        <Routes>
+          <Route element={<Layout />}>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/ranking" element={<Ranking />} />
+            <Route path="/game/:id" element={<GameDetail />} />
+            <Route path="/potential" element={<Potential />} />
+            <Route path="/ai-analysis" element={<AIAnalysis />} />
+          </Route>
+        </Routes>
+      </Suspense>
     </BrowserRouter>
   );
 }

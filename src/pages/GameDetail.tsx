@@ -235,7 +235,7 @@ export default function GameDetail() {
             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
             <XAxis dataKey="date" tick={{ fontSize: 11 }} />
             <YAxis tick={{ fontSize: 11 }} tickFormatter={shortNum} />
-            <Tooltip formatter={(value: number) => formatNumber(value)} />
+            <Tooltip formatter={(value) => formatNumber(Number(value))} />
             <Legend />
             <Line type="monotone" dataKey="fans" name="Fans" stroke="#6366f1" strokeWidth={2} dot={{ r: 2 }} activeDot={{ r: 5 }} />
             <Line type="monotone" dataKey="reserves" name="Reserves" stroke="#8b5cf6" strokeWidth={2} dot={{ r: 2 }} activeDot={{ r: 5 }} />
@@ -250,7 +250,7 @@ export default function GameDetail() {
             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
             <XAxis dataKey="date" tick={{ fontSize: 11 }} />
             <YAxis domain={[0, 10]} tick={{ fontSize: 11 }} />
-            <Tooltip formatter={(value: number) => value.toFixed(1)} />
+            <Tooltip formatter={(value) => Number(value).toFixed(1)} />
             <Line type="monotone" dataKey="rating" name="Rating" stroke="#f59e0b" strokeWidth={2} dot={{ r: 2 }} activeDot={{ r: 5 }} connectNulls />
           </LineChart>
         </ResponsiveContainer>
@@ -263,7 +263,7 @@ export default function GameDetail() {
             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
             <XAxis dataKey="date" tick={{ fontSize: 11 }} />
             <YAxis tick={{ fontSize: 11 }} tickFormatter={shortNum} />
-            <Tooltip formatter={(value: number) => formatNumber(value)} />
+            <Tooltip formatter={(value) => formatNumber(Number(value))} />
             <Line type="monotone" dataKey="reviews" name="Reviews" stroke="#22c55e" strokeWidth={2} dot={{ r: 2 }} activeDot={{ r: 5 }} />
           </LineChart>
         </ResponsiveContainer>
