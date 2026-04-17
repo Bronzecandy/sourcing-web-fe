@@ -121,7 +121,7 @@ export interface AiAnalysis {
   appId: number;
   gameName?: string;
   iconUrl?: string | null;
-  source?: "database" | "external";
+  source?: "database" | "external" | "csv-upload";
   summary: string;
   strengths: AIFeedbackItem[];
   weaknesses: AIFeedbackItem[];

@@ -158,3 +158,13 @@ export async function triggerExternalAnalysis(input: string): Promise<AiAnalysis
   });
   return data.data;
 }
+
+export async function triggerCsvAnalysis(file: File): Promise<AiAnalysis> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const { data } = await api.post<ApiResponse<AiAnalysis>>("/analysis/analyze-csv", formData, {
+    timeout: 600_000,
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return data.data;
+}
