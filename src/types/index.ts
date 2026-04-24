@@ -123,12 +123,14 @@ export interface AiAnalysis {
   iconUrl?: string | null;
   source?: "database" | "external" | "csv-upload";
   summary: string;
+  summaryBullets?: string[];
   strengths: AIFeedbackItem[];
   weaknesses: AIFeedbackItem[];
   sentimentScore: number;
   sentimentBreakdown?: SentimentBreakdown;
   topics: Record<string, number>;
   recentTrend: string;
+  recentTrendBullets?: string[];
   reviewsAnalyzed: number;
   bucketCounts: Record<string, number>;
   dateRangeStart: string | null;

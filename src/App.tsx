@@ -1,6 +1,7 @@
 import { lazy, Suspense, useEffect } from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Layout from "./components/layout/Layout";
+import { ContentLangProvider } from "./lib/content-language";
 import { queryClient } from "./lib/query-client";
 import {
   fetchDashboard,
@@ -44,17 +45,19 @@ export default function App() {
 
   return (
     <BrowserRouter>
-      <Suspense fallback={<PageLoader />}>
-        <Routes>
-          <Route element={<Layout />}>
-            <Route path="/" element={<Dashboard />} />
-            <Route path="/ranking" element={<Ranking />} />
-            <Route path="/game/:id" element={<GameDetail />} />
-            <Route path="/potential" element={<Potential />} />
-            <Route path="/ai-analysis" element={<AIAnalysis />} />
-          </Route>
-        </Routes>
-      </Suspense>
+      <ContentLangProvider>
+        <Suspense fallback={<PageLoader />}>
+          <Routes>
+            <Route element={<Layout />}>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/ranking" element={<Ranking />} />
+              <Route path="/game/:id" element={<GameDetail />} />
+              <Route path="/potential" element={<Potential />} />
+              <Route path="/ai-analysis" element={<AIAnalysis />} />
+            </Route>
+          </Routes>
+        </Suspense>
+      </ContentLangProvider>
     </BrowserRouter>
   );
 }

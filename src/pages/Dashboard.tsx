@@ -9,6 +9,7 @@ import {
 import { fetchDashboard } from "@/services/api";
 import { formatDate, formatNumber } from "@/lib/utils";
 import { useNavigate } from "react-router-dom";
+import { useUiCopy } from "@/lib/use-ui-copy";
 
 const PIE_COLORS = [
   "#6366f1", "#8b5cf6", "#a78bfa", "#c4b5fd", "#818cf8",
@@ -18,6 +19,7 @@ const PIE_COLORS = [
 
 export default function Dashboard() {
   const navigate = useNavigate();
+  const { t } = useUiCopy();
   const { data: stats, isLoading } = useQuery({
     queryKey: ["dashboard"],
     queryFn: fetchDashboard,
@@ -57,39 +59,41 @@ export default function Dashboard() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Dashboard</h1>
+        <h1 className="text-2xl font-bold">{t("Tổng quan", "Dashboard")}</h1>
         <p className="text-muted-foreground text-sm mt-1">
-          TapTap Top 200 Game Rankings Overview
+          {t("Tổng quan bảng xếp hạng Top 200 game TapTap", "TapTap Top 200 Game Rankings Overview")}
         </p>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           icon={<Gamepad2 className="w-5 h-5 text-primary" />}
-          label="Total Games"
+          label={t("Tổng số game", "Total Games")}
           value={formatNumber(stats.totalApps)}
         />
         <StatCard
           icon={<Database className="w-5 h-5 text-primary" />}
-          label="Data Points"
+          label={t("Điểm dữ liệu", "Data Points")}
           value={formatNumber(stats.totalDataPoints)}
         />
         <StatCard
           icon={<MessageSquare className="w-5 h-5 text-primary" />}
-          label="Total Reviews"
+          label={t("Tổng bình luận", "Total Reviews")}
           value={formatNumber(stats.totalReviews)}
         />
         <StatCard
           icon={<CalendarDays className="w-5 h-5 text-primary" />}
-          label="Latest Data"
-          value={stats.latestDate ? formatDate(stats.latestDate) : "N/A"}
-          sub={`${stats.dateCount} days tracked`}
+          label={t("Dữ liệu mới nhất", "Latest Data")}
+          value={stats.latestDate ? formatDate(stats.latestDate) : t("Không có", "N/A")}
+          sub={t(`${stats.dateCount} ngày đã theo dõi`, `${stats.dateCount} days tracked`)}
         />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-card rounded-xl border border-border p-5">
-          <h2 className="text-lg font-semibold mb-4">Top Movers (Today vs Yesterday)</h2>
+          <h2 className="text-lg font-semibold mb-4">
+            {t("Biến động mạnh (hôm nay so với hôm qua)", "Top Movers (Today vs Yesterday)")}
+          </h2>
           {moverData.length > 0 ? (
             <div className="space-y-2">
               {moverData.map((m) => {
@@ -124,13 +128,15 @@ export default function Dashboard() {
             </div>
           ) : (
             <p className="text-muted-foreground text-sm text-center py-8">
-              Need at least 2 days of data
+              {t("Cần ít nhất 2 ngày dữ liệu", "Need at least 2 days of data")}
             </p>
           )}
         </div>
 
         <div className="bg-card rounded-xl border border-border p-5">
-          <h2 className="text-lg font-semibold mb-4">Tag Distribution (Top 10)</h2>
+          <h2 className="text-lg font-semibold mb-4">
+            {t("Phân bố thẻ (Top 10)", "Tag Distribution (Top 10)")}
+          </h2>
           {tagData.length > 0 ? (
             <ResponsiveContainer width="100%" height={320}>
               <PieChart>
@@ -152,7 +158,7 @@ export default function Dashboard() {
               </PieChart>
             </ResponsiveContainer>
           ) : (
-            <p className="text-muted-foreground text-sm text-center py-8">No data</p>
+            <p className="text-muted-foreground text-sm text-center py-8">{t("Chưa có dữ liệu", "No data")}</p>
           )}
         </div>
       </div>
@@ -161,7 +167,7 @@ export default function Dashboard() {
         <div className="bg-card rounded-xl border border-border p-5">
           <div className="flex items-center gap-2 mb-4">
             <TrendingUp className="w-5 h-5 text-up" />
-            <h2 className="text-lg font-semibold">Top Gainers</h2>
+            <h2 className="text-lg font-semibold">{t("Tăng mạnh nhất", "Top Gainers")}</h2>
           </div>
           <div className="space-y-2">
             {stats.topMovers.gainers.slice(0, 8).map((g) => (
@@ -184,7 +190,7 @@ export default function Dashboard() {
               </div>
             ))}
             {stats.topMovers.gainers.length === 0 && (
-              <p className="text-muted-foreground text-sm py-4 text-center">No data yet</p>
+              <p className="text-muted-foreground text-sm py-4 text-center">{t("Chưa có dữ liệu", "No data yet")}</p>
             )}
           </div>
         </div>
@@ -192,7 +198,7 @@ export default function Dashboard() {
         <div className="bg-card rounded-xl border border-border p-5">
           <div className="flex items-center gap-2 mb-4">
             <TrendingDown className="w-5 h-5 text-down" />
-            <h2 className="text-lg font-semibold">Top Losers</h2>
+            <h2 className="text-lg font-semibold">{t("Giảm mạnh nhất", "Top Losers")}</h2>
           </div>
           <div className="space-y-2">
             {stats.topMovers.losers.slice(0, 8).map((l) => (
@@ -215,7 +221,7 @@ export default function Dashboard() {
               </div>
             ))}
             {stats.topMovers.losers.length === 0 && (
-              <p className="text-muted-foreground text-sm py-4 text-center">No data yet</p>
+              <p className="text-muted-foreground text-sm py-4 text-center">{t("Chưa có dữ liệu", "No data yet")}</p>
             )}
           </div>
         </div>

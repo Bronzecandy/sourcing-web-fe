@@ -56,10 +56,25 @@ export async function fetchTags(date?: string): Promise<Array<{ name: string; co
   return data.data;
 }
 
-export async function fetchGameDetail(appId: number, days?: number): Promise<GameDetail> {
+export type ContentLangParam = "vi" | "en";
+
+export async function fetchGameDetail(
+  appId: number,
+  days?: number,
+  contentLang: ContentLangParam = "vi",
+): Promise<GameDetail> {
   const { data } = await api.get<ApiResponse<GameDetail>>(`/games/${appId}`, {
-    params: { days },
+    params: { days, contentLang },
   });
+  return data.data;
+}
+
+/** Machine-translate Vietnamese UI strings to English (batched, cached on server). */
+export async function translateTextsViToEn(texts: string[]): Promise<string[]> {
+  const { data } = await api.post<{ success: boolean; data: string[] }>("/translate/strings", { texts }, {
+    timeout: 120_000,
+  });
+  if (!data.success || !Array.isArray(data.data)) throw new Error("Translation failed");
   return data.data;
 }
 

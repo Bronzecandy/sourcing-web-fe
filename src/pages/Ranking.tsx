@@ -4,9 +4,11 @@ import { useNavigate } from "react-router-dom";
 import { Search, ChevronLeft, ChevronRight, ArrowUpDown, Star, Users } from "lucide-react";
 import { fetchRankings, fetchDates, fetchTags } from "@/services/api";
 import { cn, formatNumber } from "@/lib/utils";
+import { useUiCopy } from "@/lib/use-ui-copy";
 
 export default function Ranking() {
   const navigate = useNavigate();
+  const { t } = useUiCopy();
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [selectedDate, setSelectedDate] = useState("");
@@ -55,9 +57,10 @@ export default function Ranking() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Top 200 Ranking</h1>
+        <h1 className="text-2xl font-bold">{t("Bảng xếp hạng Top 200", "Top 200 Ranking")}</h1>
         <p className="text-muted-foreground text-sm mt-1">
-          TapTap daily game rankings {rankings?.date && `- ${rankings.date}`}
+          {t("Bảng xếp hạng game TapTap theo ngày", "TapTap daily game rankings")}
+          {rankings?.date && ` — ${rankings.date}`}
         </p>
       </div>
 
@@ -66,7 +69,7 @@ export default function Ranking() {
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
           <input
             type="text"
-            placeholder="Search games..."
+            placeholder={t("Tìm game…", "Search games...")}
             value={search}
             onChange={(e) => { setSearch(e.target.value); setPage(1); }}
             className="w-full pl-10 pr-4 py-2 rounded-lg border border-border bg-card text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
@@ -83,7 +86,7 @@ export default function Ranking() {
                 platform === p ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:bg-muted"
               )}
             >
-              {p === "combined" ? "All" : p === "android" ? "Android" : "iOS"}
+              {p === "combined" ? t("Tất cả", "All") : p === "android" ? "Android" : "iOS"}
             </button>
           ))}
         </div>
@@ -93,7 +96,7 @@ export default function Ranking() {
           onChange={(e) => { setSelectedDate(e.target.value); setPage(1); }}
           className="px-3 py-2 rounded-lg border border-border bg-card text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
         >
-          <option value="">Latest Date</option>
+          <option value="">{t("Ngày mới nhất", "Latest Date")}</option>
           {dates?.map((d) => <option key={d} value={d}>{d}</option>)}
         </select>
 
@@ -102,7 +105,7 @@ export default function Ranking() {
           onChange={(e) => { setSelectedTag(e.target.value); setPage(1); }}
           className="px-3 py-2 rounded-lg border border-border bg-card text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
         >
-          <option value="">All Tags</option>
+          <option value="">{t("Tất cả thẻ", "All Tags")}</option>
           {tags?.slice(0, 30).map((t) => (
             <option key={t.name} value={t.name}>{t.name} ({t.count})</option>
           ))}
@@ -120,21 +123,21 @@ export default function Ranking() {
               <table className="w-full">
                 <thead className="bg-muted/50">
                   <tr>
-                    <SortHeader field="rank" label="Rank" />
-                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Game</th>
+                    <SortHeader field="rank" label={t("Hạng", "Rank")} />
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">{t("Game", "Game")}</th>
                     {platform === "combined" && (
                       <>
                         <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Android</th>
                         <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">iOS</th>
                       </>
                     )}
-                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Tags</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Rating</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">{t("Thẻ", "Tags")}</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">{t("Đánh giá", "Rating")}</th>
                     <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                      <div className="flex items-center gap-1"><Users className="w-3 h-3" />Fans</div>
+                      <div className="flex items-center gap-1"><Users className="w-3 h-3" />{t("Fan", "Fans")}</div>
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Reserves</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Reviews</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">{t("Đăng ký trước", "Reserves")}</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">{t("Bình luận", "Reviews")}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -169,7 +172,7 @@ export default function Ranking() {
                             )}
                             <div>
                               <p className="font-medium text-sm">{item.title}</p>
-                              <p className="text-xs text-muted-foreground">ID: {item.appId}</p>
+                              <p className="text-xs text-muted-foreground">{t("Mã", "ID")}: {item.appId}</p>
                             </div>
                           </div>
                         </td>
@@ -219,7 +222,10 @@ export default function Ranking() {
             {rankings && rankings.totalPages > 1 && (
               <div className="flex items-center justify-between px-4 py-3 border-t border-border">
                 <p className="text-sm text-muted-foreground">
-                  {(rankings.page - 1) * rankings.limit + 1}-{Math.min(rankings.page * rankings.limit, rankings.total)} of {rankings.total}
+                  {t(
+                    `${(rankings.page - 1) * rankings.limit + 1}–${Math.min(rankings.page * rankings.limit, rankings.total)} / ${rankings.total}`,
+                    `${(rankings.page - 1) * rankings.limit + 1}-${Math.min(rankings.page * rankings.limit, rankings.total)} of ${rankings.total}`,
+                  )}
                 </p>
                 <div className="flex items-center gap-2">
                   <button disabled={page === 1} onClick={() => setPage(page - 1)}

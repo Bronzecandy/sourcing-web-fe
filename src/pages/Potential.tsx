@@ -8,12 +8,14 @@ import {
 import { TrendingUp, Zap, ArrowUp, Bookmark, ChevronUp, ChevronDown, ArrowUpDown } from "lucide-react";
 import { fetchPotentialScores, fetchBreakoutGames, fetchReserveGrowth } from "@/services/api";
 import { cn, getScoreColor, getTrendIcon, formatNumber } from "@/lib/utils";
+import { useUiCopy, potentialRadarMetric } from "@/lib/use-ui-copy";
 
 type ReserveSortKey = "growth" | "growthRate";
 type SortDir = "asc" | "desc";
 
 export default function Potential() {
   const navigate = useNavigate();
+  const { t, lang } = useUiCopy();
   const [days, setDays] = useState(14);
   const [platform, setPlatform] = useState<"combined" | "android" | "ios">("combined");
   const [selectedAppId, setSelectedAppId] = useState<number | null>(null);
@@ -48,19 +50,25 @@ export default function Potential() {
   }, [reserveGrowth, reserveSort]);
 
   const selected = scores?.find((s) => s.appId === selectedAppId);
-  const radarData = selected
-    ? [
-        { metric: "Momentum", value: selected.momentumScore },
-        { metric: "Engagement", value: selected.engagementScore },
-        { metric: "Stability", value: selected.stabilityScore },
-      ]
-    : [];
+  const radarData = useMemo(
+    () =>
+      selected
+        ? [
+            { metric: potentialRadarMetric("Momentum", lang), value: selected.momentumScore },
+            { metric: potentialRadarMetric("Engagement", lang), value: selected.engagementScore },
+            { metric: potentialRadarMetric("Stability", lang), value: selected.stabilityScore },
+          ]
+        : [],
+    [selected, lang],
+  );
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">Potential Analysis</h1>
-        <p className="text-muted-foreground text-sm mt-1">Algorithm-based game potential scoring</p>
+        <h1 className="text-2xl font-bold">{t("Phân tích tiềm năng", "Potential Analysis")}</h1>
+        <p className="text-muted-foreground text-sm mt-1">
+          {t("Chấm điểm tiềm năng game theo thuật toán", "Algorithm-based game potential scoring")}
+        </p>
       </div>
 
       <div className="flex flex-wrap gap-3">
@@ -70,7 +78,7 @@ export default function Potential() {
               className={cn("px-4 py-2 text-sm font-medium transition-colors",
                 platform === p ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:bg-muted"
               )}>
-              {p === "combined" ? "All" : p === "android" ? "Android" : "iOS"}
+              {p === "combined" ? t("Tất cả", "All") : p === "android" ? "Android" : "iOS"}
             </button>
           ))}
         </div>
@@ -80,7 +88,7 @@ export default function Potential() {
               className={cn("px-4 py-2 rounded-lg text-sm font-medium transition-colors",
                 days === d ? "bg-primary text-primary-foreground" : "bg-card border border-border text-muted-foreground hover:bg-muted"
               )}>
-              {d}d
+              {lang === "vi" ? `${d} ngày` : `${d}d`}
             </button>
           ))}
         </div>
@@ -90,7 +98,7 @@ export default function Potential() {
         <div className="lg:col-span-2 bg-card rounded-xl border border-border overflow-hidden">
           <div className="px-5 py-4 border-b border-border">
             <h2 className="font-semibold flex items-center gap-2">
-              <TrendingUp className="w-5 h-5 text-primary" /> Potential Ranking
+              <TrendingUp className="w-5 h-5 text-primary" /> {t("Bảng xếp hạng tiềm năng", "Potential Ranking")}
             </h2>
           </div>
 
@@ -104,14 +112,14 @@ export default function Potential() {
                 <thead className="bg-muted/50 sticky top-0">
                   <tr>
                     <th className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase">#</th>
-                    <th className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Game</th>
-                    <th className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Rank</th>
-                    <th className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Momentum</th>
-                    <th className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Engage.</th>
-                    <th className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Stability</th>
-                    <th className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Conf.</th>
-                    <th className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Score</th>
-                    <th className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Trend</th>
+                    <th className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase">{t("Game", "Game")}</th>
+                    <th className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase">{t("Hạng", "Rank")}</th>
+                    <th className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase">{t("Đà tăng", "Momentum")}</th>
+                    <th className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase">{t("TTác.", "Engage.")}</th>
+                    <th className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase">{t("Ổn định", "Stability")}</th>
+                    <th className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase">{t("Tin cậy", "Conf.")}</th>
+                    <th className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase">{t("Điểm", "Score")}</th>
+                    <th className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase">{t("Xu hướng", "Trend")}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
@@ -136,10 +144,10 @@ export default function Potential() {
                           <span className="flex flex-col leading-tight">
                             {s.androidRank != null && <span>🤖 #{s.androidRank}</span>}
                             {s.iosRank != null && <span>🍎 #{s.iosRank}</span>}
-                            {s.androidRank == null && s.iosRank == null && "N/A"}
+                            {s.androidRank == null && s.iosRank == null && t("Không có", "N/A")}
                           </span>
                         ) : (
-                          <>#{s.currentRank ?? "N/A"}</>
+                          <>#{s.currentRank ?? t("Không có", "N/A")}</>
                         )}
                       </td>
                       <td className="px-3 py-3"><ScoreBar value={s.momentumScore} /></td>
@@ -179,15 +187,16 @@ export default function Potential() {
                 </RadarChart>
               </ResponsiveContainer>
               <div className="text-center mt-2">
-                <span className="text-xs text-muted-foreground">Fans: </span>
-                <span className="text-xs font-medium">{selected.fansCount != null ? formatNumber(selected.fansCount) : "N/A"}</span>
+                <span className="text-xs text-muted-foreground">{t("Fan:", "Fans: ")}</span>
+                <span className="text-xs font-medium">{selected.fansCount != null ? formatNumber(selected.fansCount) : t("Không có", "N/A")}</span>
               </div>
             </div>
           )}
 
           <div className="bg-card rounded-xl border border-border p-5">
             <h3 className="font-semibold flex items-center gap-2 mb-4">
-              <Zap className="w-5 h-5 text-yellow-500" /> Breakout Games ({days}d)
+              <Zap className="w-5 h-5 text-yellow-500" />{" "}
+              {t(`Game bùng nổ (${days} ngày)`, `Breakout Games (${days}d)`)}
             </h3>
             {breakouts && breakouts.length > 0 ? (
               <div className="space-y-3">
@@ -213,7 +222,9 @@ export default function Potential() {
                 ))}
               </div>
             ) : (
-              <p className="text-muted-foreground text-sm text-center py-4">No breakout games detected</p>
+              <p className="text-muted-foreground text-sm text-center py-4">
+                {t("Chưa phát hiện game bùng nổ", "No breakout games detected")}
+              </p>
             )}
           </div>
         </div>
@@ -222,9 +233,12 @@ export default function Potential() {
       <div className="bg-card rounded-xl border border-border overflow-hidden">
         <div className="px-5 py-4 border-b border-border">
           <h2 className="font-semibold flex items-center gap-2">
-            <Bookmark className="w-5 h-5 text-primary" /> Top Reserve Growth ({days}d)
+            <Bookmark className="w-5 h-5 text-primary" />{" "}
+            {t(`Tăng đăng ký trước mạnh nhất (${days} ngày)`, `Top Reserve Growth (${days}d)`)}
           </h2>
-          <p className="text-xs text-muted-foreground mt-1">Games with the highest increase in pre-registrations</p>
+          <p className="text-xs text-muted-foreground mt-1">
+            {t("Game tăng số lượng đăng ký trước nhiều nhất", "Games with the highest increase in pre-registrations")}
+          </p>
         </div>
         {reserveGrowth && reserveGrowth.length > 0 ? (
           <div className="overflow-x-auto max-h-[480px] overflow-y-auto">
@@ -232,20 +246,20 @@ export default function Potential() {
               <thead className="bg-muted/50 sticky top-0">
                 <tr>
                   <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">#</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Game</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">Rank</th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase">Start</th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase">Current</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">{t("Game", "Game")}</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">{t("Hạng", "Rank")}</th>
+                  <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase">{t("Đầu kỳ", "Start")}</th>
+                  <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase">{t("Hiện tại", "Current")}</th>
                   <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase">
                     <button className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
                       onClick={() => toggleReserveSort("growth")}>
-                      Growth <SortIcon active={reserveSort.key === "growth"} dir={reserveSort.dir} />
+                      {t("Tăng tuyệt đối", "Growth")} <SortIcon active={reserveSort.key === "growth"} dir={reserveSort.dir} />
                     </button>
                   </th>
                   <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase">
                     <button className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
                       onClick={() => toggleReserveSort("growthRate")}>
-                      Rate <SortIcon active={reserveSort.key === "growthRate"} dir={reserveSort.dir} />
+                      {t("Tỷ lệ %", "Rate")} <SortIcon active={reserveSort.key === "growthRate"} dir={reserveSort.dir} />
                     </button>
                   </th>
                 </tr>
@@ -266,7 +280,7 @@ export default function Potential() {
                         <span className="text-sm font-medium max-w-[160px] truncate">{g.title}</span>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-sm text-muted-foreground">#{g.currentRank ?? "N/A"}</td>
+                    <td className="px-4 py-3 text-sm text-muted-foreground">#{g.currentRank ?? t("Không có", "N/A")}</td>
                     <td className="px-4 py-3 text-sm text-right text-muted-foreground">{formatNumber(g.startReserve)}</td>
                     <td className="px-4 py-3 text-sm text-right font-medium">{formatNumber(g.currentReserve)}</td>
                     <td className="px-4 py-3 text-right">
@@ -286,7 +300,9 @@ export default function Potential() {
             </table>
           </div>
         ) : (
-          <p className="text-muted-foreground text-sm text-center py-8">No reserve growth data available</p>
+          <p className="text-muted-foreground text-sm text-center py-8">
+            {t("Chưa có dữ liệu tăng đăng ký trước", "No reserve growth data available")}
+          </p>
         )}
       </div>
     </div>

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -7,6 +7,17 @@ import {
 } from "recharts";
 import { ArrowLeft, Brain, Star, Users, Heart, MessageSquare, TrendingUp, Activity, Shield, Database, History, ChevronDown, ChevronUp, Trash2, Plus, Sparkles } from "lucide-react";
 import { fetchGameDetail, fetchGameReviews, triggerAnalysis, fetchGamePotentialDetail, fetchLatestAnalysis, fetchAnalysisHistory, deleteAnalysis } from "@/services/api";
+import { useContentLang } from "@/lib/content-language";
+import { localizeAnalysisToEn, getSummaryBullets, getRecentTrendBullets } from "@/lib/analysis-localize";
+import { AnalysisBulletBlock } from "@/components/AnalysisBulletBlock";
+import {
+  useUiCopy,
+  potentialRadarMetric,
+  sentimentScoreUiLabel,
+  bucketDisplayName,
+  topicKeyLabel,
+  tierMentionLabel,
+} from "@/lib/use-ui-copy";
 import { cn, formatNumber, getScoreColor } from "@/lib/utils";
 import type { AiAnalysis, AIFeedbackItem, SentimentBreakdown, GameReview, GamePotentialDetail } from "@/types";
 
@@ -26,31 +37,33 @@ const STAR_COLORS: Record<string, string> = {
   "5": "bg-emerald-500",
 };
 
-const TOPIC_LABELS: Record<string, { label: string; color: string }> = {
-  gameplay: { label: "Gameplay", color: "bg-blue-500" },
-  graphics: { label: "Graphics", color: "bg-purple-500" },
-  story: { label: "Story", color: "bg-amber-500" },
-  monetization: { label: "Monetization", color: "bg-red-500" },
-  performance: { label: "Performance", color: "bg-emerald-500" },
-  community: { label: "Community", color: "bg-cyan-500" },
+const TOPIC_COLORS: Record<string, string> = {
+  gameplay: "bg-blue-500",
+  graphics: "bg-purple-500",
+  story: "bg-amber-500",
+  monetization: "bg-red-500",
+  performance: "bg-emerald-500",
+  community: "bg-cyan-500",
 };
 
-const TIER_LABELS: Record<string, { label: string; color: string }> = {
-  frequent: { label: "Frequently mentioned", color: "text-foreground" },
-  moderate: { label: "Moderately mentioned", color: "text-muted-foreground" },
-  rare: { label: "Rarely mentioned", color: "text-muted-foreground/60" },
+const TIER_ROW_STYLE: Record<string, { color: string }> = {
+  frequent: { color: "text-foreground" },
+  moderate: { color: "text-muted-foreground" },
+  rare: { color: "text-muted-foreground/60" },
 };
 
 export default function GameDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { lang: contentLang } = useContentLang();
+  const { t } = useUiCopy();
   const [days, setDays] = useState(30);
   const [reviewPage, setReviewPage] = useState(1);
   const appId = parseInt(id || "0");
 
   const { data: game, isLoading } = useQuery({
-    queryKey: ["game", appId, days],
-    queryFn: () => fetchGameDetail(appId, days),
+    queryKey: ["game", appId, days, contentLang],
+    queryFn: () => fetchGameDetail(appId, days, contentLang),
     enabled: appId > 0,
   });
 
@@ -102,8 +115,8 @@ export default function GameDetail() {
   if (!game) {
     return (
       <div className="text-center py-20">
-        <p className="text-muted-foreground">Game not found</p>
-        <button onClick={() => navigate(-1)} className="mt-4 text-primary hover:underline">Go back</button>
+        <p className="text-muted-foreground">{t("Không tìm thấy game", "Game not found")}</p>
+        <button onClick={() => navigate(-1)} className="mt-4 text-primary hover:underline">{t("Quay lại", "Go back")}</button>
       </div>
     );
   }
@@ -131,7 +144,7 @@ export default function GameDetail() {
   return (
     <div className="space-y-6">
       <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
-        <ArrowLeft className="w-4 h-4" /> Back
+        <ArrowLeft className="w-4 h-4" /> {t("Quay lại", "Back")}
       </button>
 
       {/* Header */}
@@ -150,8 +163,8 @@ export default function GameDetail() {
               {game.tags.map((tag) => (
                 <span key={tag} className="px-2 py-0.5 rounded-full bg-accent text-accent-foreground text-xs font-medium">{tag}</span>
               ))}
-              {game.isExclusive && <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-medium">Exclusive</span>}
-              {game.editorChoice && <span className="px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800 text-xs font-medium">Editor's Choice</span>}
+              {game.isExclusive && <span className="px-2 py-0.5 rounded-full bg-primary/10 text-primary text-xs font-medium">{t("Độc quyền", "Exclusive")}</span>}
+              {game.editorChoice && <span className="px-2 py-0.5 rounded-full bg-yellow-100 text-yellow-800 text-xs font-medium">{t("Biên tập viên chọn", "Editor's Choice")}</span>}
             </div>
             {game.description && (
               <p className="text-sm text-muted-foreground mt-3 max-w-3xl line-clamp-3" dangerouslySetInnerHTML={{ __html: game.description }} />
@@ -160,13 +173,13 @@ export default function GameDetail() {
           <div className="flex gap-4 text-center">
             {game.androidRank && (
               <div>
-                <p className="text-xs text-muted-foreground">Android</p>
+                <p className="text-xs text-muted-foreground">{t("Android", "Android")}</p>
                 <p className="text-2xl font-bold text-primary">#{game.androidRank}</p>
               </div>
             )}
             {game.iosRank && (
               <div>
-                <p className="text-xs text-muted-foreground">iOS</p>
+                <p className="text-xs text-muted-foreground">{t("iOS", "iOS")}</p>
                 <p className="text-2xl font-bold text-primary">#{game.iosRank}</p>
               </div>
             )}
@@ -176,14 +189,14 @@ export default function GameDetail() {
 
       {/* Stats — no Views, enhanced Reviews */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <MiniStat icon={<Star className="w-4 h-4 text-yellow-500" />} label="Rating" value={game.rating ? `${game.rating}/10` : "N/A"} />
-        <MiniStat icon={<Users className="w-4 h-4" />} label="Fans" value={game.fansCount != null ? formatNumber(game.fansCount) : "N/A"} />
-        <MiniStat icon={<Heart className="w-4 h-4" />} label="Reserves" value={game.reserveCount != null ? formatNumber(game.reserveCount) : "N/A"} />
+        <MiniStat icon={<Star className="w-4 h-4 text-yellow-500" />} label={t("Đánh giá", "Rating")} value={game.rating ? `${game.rating}/10` : "N/A"} />
+        <MiniStat icon={<Users className="w-4 h-4" />} label={t("Người hâm mộ", "Fans")} value={game.fansCount != null ? formatNumber(game.fansCount) : "N/A"} />
+        <MiniStat icon={<Heart className="w-4 h-4" />} label={t("Đăng ký trước", "Reserves")} value={game.reserveCount != null ? formatNumber(game.reserveCount) : "N/A"} />
         <MiniStat
           icon={<MessageSquare className="w-4 h-4" />}
-          label="Reviews"
+          label={t("Bình luận", "Reviews")}
           value={game.reviewCount != null ? formatNumber(game.reviewCount) : "N/A"}
-          sub={`${formatNumber(game.actualReviewCount)} in DB`}
+          sub={t(`${formatNumber(game.actualReviewCount)} trong CSDL`, `${formatNumber(game.actualReviewCount)} in DB`)}
         />
       </div>
 
@@ -203,14 +216,14 @@ export default function GameDetail() {
       {/* Charts */}
       <div className="bg-card rounded-xl border border-border p-5">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold">Rank History</h2>
+          <h2 className="text-lg font-semibold">{t("Lịch sử xếp hạng", "Rank History")}</h2>
           <div className="flex gap-2">
             {[7, 14, 30, 60].map((d) => (
               <button key={d} onClick={() => setDays(d)}
                 className={cn("px-3 py-1 rounded-lg text-xs font-medium transition-colors",
                   days === d ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"
                 )}>
-                {d}d
+                {contentLang === "vi" ? `${d} ngày` : `${d}d`}
               </button>
             ))}
           </div>
@@ -229,7 +242,7 @@ export default function GameDetail() {
       </div>
 
       <div className="bg-card rounded-xl border border-border p-5">
-        <h2 className="text-lg font-semibold mb-4">Fans & Reserves History</h2>
+        <h2 className="text-lg font-semibold mb-4">{t("Lịch sử fan & đăng ký trước", "Fans & Reserves History")}</h2>
         <ResponsiveContainer width="100%" height={280}>
           <LineChart data={reserveChartData}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
@@ -237,34 +250,34 @@ export default function GameDetail() {
             <YAxis tick={{ fontSize: 11 }} tickFormatter={shortNum} />
             <Tooltip formatter={(value) => formatNumber(Number(value))} />
             <Legend />
-            <Line type="monotone" dataKey="fans" name="Fans" stroke="#6366f1" strokeWidth={2} dot={{ r: 2 }} activeDot={{ r: 5 }} />
-            <Line type="monotone" dataKey="reserves" name="Reserves" stroke="#8b5cf6" strokeWidth={2} dot={{ r: 2 }} activeDot={{ r: 5 }} />
+            <Line type="monotone" dataKey="fans" name={t("Người hâm mộ", "Fans")} stroke="#6366f1" strokeWidth={2} dot={{ r: 2 }} activeDot={{ r: 5 }} />
+            <Line type="monotone" dataKey="reserves" name={t("Đăng ký trước", "Reserves")} stroke="#8b5cf6" strokeWidth={2} dot={{ r: 2 }} activeDot={{ r: 5 }} />
           </LineChart>
         </ResponsiveContainer>
       </div>
 
       <div className="bg-card rounded-xl border border-border p-5">
-        <h2 className="text-lg font-semibold mb-4">Rating History</h2>
+        <h2 className="text-lg font-semibold mb-4">{t("Lịch sử điểm đánh giá", "Rating History")}</h2>
         <ResponsiveContainer width="100%" height={250}>
           <LineChart data={reserveChartData}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
             <XAxis dataKey="date" tick={{ fontSize: 11 }} />
             <YAxis domain={[0, 10]} tick={{ fontSize: 11 }} />
             <Tooltip formatter={(value) => Number(value).toFixed(1)} />
-            <Line type="monotone" dataKey="rating" name="Rating" stroke="#f59e0b" strokeWidth={2} dot={{ r: 2 }} activeDot={{ r: 5 }} connectNulls />
+            <Line type="monotone" dataKey="rating" name={t("Đánh giá", "Rating")} stroke="#f59e0b" strokeWidth={2} dot={{ r: 2 }} activeDot={{ r: 5 }} connectNulls />
           </LineChart>
         </ResponsiveContainer>
       </div>
 
       <div className="bg-card rounded-xl border border-border p-5">
-        <h2 className="text-lg font-semibold mb-4">Reviews History</h2>
+        <h2 className="text-lg font-semibold mb-4">{t("Lịch sử số bình luận", "Reviews History")}</h2>
         <ResponsiveContainer width="100%" height={250}>
           <LineChart data={reserveChartData}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
             <XAxis dataKey="date" tick={{ fontSize: 11 }} />
             <YAxis tick={{ fontSize: 11 }} tickFormatter={shortNum} />
             <Tooltip formatter={(value) => formatNumber(Number(value))} />
-            <Line type="monotone" dataKey="reviews" name="Reviews" stroke="#22c55e" strokeWidth={2} dot={{ r: 2 }} activeDot={{ r: 5 }} />
+            <Line type="monotone" dataKey="reviews" name={t("Bình luận", "Reviews")} stroke="#22c55e" strokeWidth={2} dot={{ r: 2 }} activeDot={{ r: 5 }} />
           </LineChart>
         </ResponsiveContainer>
       </div>
@@ -272,7 +285,8 @@ export default function GameDetail() {
       {/* User Reviews */}
       <div className="bg-card rounded-xl border border-border p-5">
         <h2 className="text-lg font-semibold mb-4">
-          User Reviews {reviews?.total != null && <span className="text-sm font-normal text-muted-foreground">({formatNumber(reviews.total)})</span>}
+          {t("Bình luận người chơi", "User Reviews")}
+          {reviews?.total != null && <span className="text-sm font-normal text-muted-foreground"> ({formatNumber(reviews.total)})</span>}
         </h2>
         {reviews?.data && reviews.data.length > 0 ? (
           <div className="space-y-3">
@@ -302,15 +316,15 @@ export default function GameDetail() {
             {reviews.totalPages > 1 && (
               <div className="flex justify-center gap-2 pt-2">
                 <button disabled={reviewPage === 1} onClick={() => setReviewPage(reviewPage - 1)}
-                  className="px-3 py-1 text-xs rounded border border-border disabled:opacity-40">Prev</button>
+                  className="px-3 py-1 text-xs rounded border border-border disabled:opacity-40">{t("Trước", "Prev")}</button>
                 <span className="px-3 py-1 text-xs">{reviewPage}/{reviews.totalPages}</span>
                 <button disabled={reviewPage === reviews.totalPages} onClick={() => setReviewPage(reviewPage + 1)}
-                  className="px-3 py-1 text-xs rounded border border-border disabled:opacity-40">Next</button>
+                  className="px-3 py-1 text-xs rounded border border-border disabled:opacity-40">{t("Sau", "Next")}</button>
               </div>
             )}
           </div>
         ) : (
-          <p className="text-muted-foreground text-sm text-center py-8">No reviews available</p>
+          <p className="text-muted-foreground text-sm text-center py-8">{t("Chưa có bình luận", "No reviews available")}</p>
         )}
       </div>
     </div>
@@ -330,6 +344,7 @@ function MiniStat({ icon, label, value, sub }: { icon: React.ReactNode; label: s
 }
 
 function ReviewDistributionCard({ distribution, actualCount }: { distribution: Record<string, number>; actualCount: number }) {
+  const { t } = useUiCopy();
   const total = Object.values(distribution).reduce((a, b) => a + b, 0);
   if (total === 0) return null;
 
@@ -338,8 +353,10 @@ function ReviewDistributionCard({ distribution, actualCount }: { distribution: R
   return (
     <div className="bg-card rounded-xl border border-border p-5">
       <h3 className="text-sm font-semibold flex items-center gap-2 mb-4">
-        <Database className="w-4 h-4 text-primary" /> Review Score Distribution
-        <span className="text-xs font-normal text-muted-foreground">({formatNumber(total)} rated / {formatNumber(actualCount)} total in DB)</span>
+        <Database className="w-4 h-4 text-primary" /> {t("Phân bố điểm sao", "Review Score Distribution")}
+        <span className="text-xs font-normal text-muted-foreground">
+          ({formatNumber(total)} {t("có sao", "rated")} / {formatNumber(actualCount)} {t("tổng trong CSDL", "total in DB")})
+        </span>
       </h3>
       <div className="space-y-2">
         {stars.map((star) => {
@@ -363,15 +380,8 @@ function ReviewDistributionCard({ distribution, actualCount }: { distribution: R
   );
 }
 
-function sentimentLabel(score: number) {
-  if (score >= 80) return { text: "Very Positive", cls: "text-emerald-500" };
-  if (score >= 60) return { text: "Positive", cls: "text-green-500" };
-  if (score >= 40) return { text: "Mixed", cls: "text-amber-500" };
-  if (score >= 20) return { text: "Negative", cls: "text-orange-500" };
-  return { text: "Very Negative", cls: "text-red-500" };
-}
-
 function FeedbackSection({ items, type }: { items: AIFeedbackItem[]; type: "strength" | "weakness" }) {
+  const { t, lang } = useUiCopy();
   const isStrength = type === "strength";
   const groupedByTier = {
     frequent: items.filter((i) => i.tier === "frequent"),
@@ -383,16 +393,18 @@ function FeedbackSection({ items, type }: { items: AIFeedbackItem[]; type: "stre
     <div className="border border-border/50 rounded-lg p-4">
       <h4 className={cn("text-sm font-medium mb-3 flex items-center gap-1", isStrength ? "text-emerald-500" : "text-red-500")}>
         <span className={cn("w-2 h-2 rounded-full", isStrength ? "bg-emerald-500" : "bg-red-500")} />
-        {isStrength ? "Strengths" : "Weaknesses"}
+        {isStrength ? t("Điểm mạnh", "Strengths") : t("Điểm yếu", "Weaknesses")}
       </h4>
       <div className="space-y-3">
         {(["frequent", "moderate", "rare"] as const).map((tier) => {
           const group = groupedByTier[tier];
           if (group.length === 0) return null;
-          const tierInfo = TIER_LABELS[tier];
+          const tierStyle = TIER_ROW_STYLE[tier];
           return (
             <div key={tier}>
-              <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wide mb-1.5">{tierInfo.label}</p>
+              <p className={cn("text-[10px] font-medium uppercase tracking-wide mb-1.5", tierStyle?.color ?? "text-muted-foreground")}>
+                {tierMentionLabel(tier, lang)}
+              </p>
               <ul className="space-y-1.5">
                 {group.map((item, i) => (
                   <li key={i} className="text-sm flex items-start gap-2">
@@ -419,13 +431,6 @@ function FeedbackSection({ items, type }: { items: AIFeedbackItem[]; type: "stre
   );
 }
 
-const SENTIMENT_CRITERIA = [
-  { key: "ratingDistribution" as const, label: "Rating Distribution", weight: "30%", icon: "⭐", desc: "Based on weighted average of star ratings" },
-  { key: "textSentiment" as const, label: "Text Sentiment", weight: "35%", icon: "💬", desc: "Tone and language used in review text" },
-  { key: "issueSeverity" as const, label: "Issue Severity", weight: "20%", icon: "🔧", desc: "How critical the reported issues are (higher = less severe)" },
-  { key: "trendMomentum" as const, label: "Trend Momentum", weight: "15%", icon: "📈", desc: "Whether recent reviews are improving or declining" },
-];
-
 function scoreColor(score: number) {
   if (score >= 75) return "text-emerald-500";
   if (score >= 50) return "text-green-500";
@@ -440,13 +445,27 @@ function scoreBg(score: number) {
   return "bg-red-500";
 }
 
+type SentimentCriterionKey = "ratingDistribution" | "textSentiment" | "issueSeverity" | "trendMomentum";
+
 function SentimentScoreSection({ score, breakdown }: { score: number; breakdown?: SentimentBreakdown }) {
-  const sent = sentimentLabel(score);
+  const { t, lang } = useUiCopy();
+  const sent = sentimentScoreUiLabel(score, lang);
+  const criteria: Array<{
+    key: SentimentCriterionKey;
+    label: string;
+    weight: string;
+    icon: string;
+  }> = [
+    { key: "ratingDistribution", label: t("Phân bố sao", "Rating Distribution"), weight: "30%", icon: "⭐" },
+    { key: "textSentiment", label: t("Cảm xúc trong lời văn", "Text Sentiment"), weight: "35%", icon: "💬" },
+    { key: "issueSeverity", label: t("Mức độ nghiêm trọng vấn đề", "Issue Severity"), weight: "20%", icon: "🔧" },
+    { key: "trendMomentum", label: t("Xu hướng theo thời gian", "Trend Momentum"), weight: "15%", icon: "📈" },
+  ];
 
   return (
     <div className="mb-5 border border-border/50 rounded-lg p-4">
       <div className="flex items-center justify-between mb-3">
-        <h4 className="text-sm font-semibold">Social Sentiment Score</h4>
+        <h4 className="text-sm font-semibold">{t("Điểm cảm xúc cộng đồng", "Social Sentiment Score")}</h4>
         <div className="flex items-center gap-2">
           <span className={cn("text-xl font-bold", sent.cls)}>{score}</span>
           <span className={cn("text-xs font-medium px-2 py-0.5 rounded-full", sent.cls,
@@ -464,8 +483,10 @@ function SentimentScoreSection({ score, breakdown }: { score: number; breakdown?
 
       {breakdown ? (
         <div className="space-y-3">
-          <p className="text-[10px] text-muted-foreground uppercase tracking-wide font-medium">Score Breakdown</p>
-          {SENTIMENT_CRITERIA.map((c) => {
+          <p className="text-[10px] text-muted-foreground uppercase tracking-wide font-medium">
+            {t("Chi tiết điểm", "Score Breakdown")}
+          </p>
+          {criteria.map((c) => {
             const criterion = breakdown[c.key];
             if (!criterion) return null;
             return (
@@ -493,7 +514,9 @@ function SentimentScoreSection({ score, breakdown }: { score: number; breakdown?
           )}
         </div>
       ) : (
-        <p className="text-xs text-muted-foreground">Detailed breakdown not available for this analysis.</p>
+        <p className="text-xs text-muted-foreground">
+          {t("Chưa có bảng chi tiết cho phân tích này.", "Detailed breakdown not available for this analysis.")}
+        </p>
       )}
     </div>
   );
@@ -511,12 +534,23 @@ function AIAnalysisSection({
   const [showHistory, setShowHistory] = useState(false);
   const [viewingIdx, setViewingIdx] = useState<number | null>(null);
   const queryClient = useQueryClient();
+  const { lang: contentLang } = useContentLang();
+  const { t } = useUiCopy();
   const appId = analysisResult?.appId ?? history[0]?.appId ?? 0;
 
   const displayed = viewingIdx != null && history[viewingIdx] ? history[viewingIdx] : analysisResult;
 
+  const { data: localized, isPending: localizing } = useQuery({
+    queryKey: ["ai-analysis-localized", displayed?.appId, displayed?.analyzedAt, contentLang],
+    queryFn: () => localizeAnalysisToEn(displayed!),
+    enabled: !!displayed && contentLang === "en",
+    staleTime: 86_400_000,
+  });
+
+  const view = contentLang === "en" ? (localized ?? displayed) : displayed;
+
   const handleDelete = async (analyzedAt: string) => {
-    if (!confirm("Delete this analysis?")) return;
+    if (!confirm(t("Xóa phân tích này?", "Delete this analysis?"))) return;
     try {
       await deleteAnalysis(appId, analyzedAt);
       queryClient.invalidateQueries({ queryKey: ["ai-analysis", appId] });
@@ -526,7 +560,7 @@ function AIAnalysisSection({
   };
 
   const handleDeleteAll = async () => {
-    if (!confirm(`Delete all ${history.length} analyses for this game?`)) return;
+    if (!confirm(t(`Xóa tất cả ${history.length} phân tích của game này?`, `Delete all ${history.length} analyses for this game?`))) return;
     try {
       await deleteAnalysis(appId);
       queryClient.invalidateQueries({ queryKey: ["ai-analysis", appId] });
@@ -542,9 +576,12 @@ function AIAnalysisSection({
         <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-500/20 to-blue-500/20 flex items-center justify-center mx-auto mb-4">
           <Sparkles className="w-7 h-7 text-purple-500" />
         </div>
-        <h3 className="font-semibold mb-1">AI Review Analysis</h3>
+        <h3 className="font-semibold mb-1">{t("Phân tích bình luận bằng AI", "AI Review Analysis")}</h3>
         <p className="text-sm text-muted-foreground mb-4 max-w-md mx-auto">
-          Analyze player reviews with AI to uncover strengths, weaknesses, sentiment trends, and key topics.
+          {t(
+            "Dùng AI để đọc bình luận người chơi, rút điểm mạnh/yếu, cảm xúc và các chủ đề chính.",
+            "Analyze player reviews with AI to uncover strengths, weaknesses, sentiment trends, and key topics.",
+          )}
         </p>
         <button
           onClick={() => analysisMutation.mutate()}
@@ -554,16 +591,18 @@ function AIAnalysisSection({
           {analysisMutation.isPending ? (
             <span className="flex items-center gap-2">
               <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
-              Analyzing reviews...
+              {t("Đang phân tích bình luận…", "Analyzing reviews...")}
             </span>
           ) : (
             <span className="flex items-center gap-2">
-              <Sparkles className="w-4 h-4" /> Run AI Analysis
+              <Sparkles className="w-4 h-4" /> {t("Chạy phân tích AI", "Run AI Analysis")}
             </span>
           )}
         </button>
         {analysisMutation.isError && (
-          <p className="text-down text-xs mt-3">Error: {(analysisMutation.error as Error)?.message ?? "Analysis failed"}</p>
+          <p className="text-destructive text-xs mt-3">
+            {t("Lỗi:", "Error:")} {(analysisMutation.error as Error)?.message ?? t("Phân tích thất bại", "Analysis failed")}
+          </p>
         )}
       </div>
     );
@@ -571,15 +610,14 @@ function AIAnalysisSection({
 
   if (!displayed) return null;
 
-  const sent = sentimentLabel(displayed.sentimentScore);
-  const buckets = displayed.bucketCounts ?? {};
-  const totalReviews = displayed.reviewsAnalyzed ?? 0;
+  const buckets = view!.bucketCounts ?? {};
+  const totalReviews = view!.reviewsAnalyzed ?? 0;
 
   return (
     <div className="bg-card rounded-xl border border-border p-5">
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-lg font-semibold flex items-center gap-2">
-          <Brain className="w-5 h-5" /> AI Review Analysis
+          <Brain className="w-5 h-5" /> {t("Phân tích bình luận bằng AI", "AI Review Analysis")}
         </h2>
         <div className="flex items-center gap-2">
           {history.length > 0 && (
@@ -587,7 +625,7 @@ function AIAnalysisSection({
               onClick={() => { setShowHistory(!showHistory); }}
               className="px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-muted transition-colors flex items-center gap-1.5"
             >
-              <History className="w-3.5 h-3.5" /> History ({history.length})
+              <History className="w-3.5 h-3.5" /> {t("Lịch sử", "History")} ({history.length})
               {showHistory ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
             </button>
           )}
@@ -599,11 +637,11 @@ function AIAnalysisSection({
             {analysisMutation.isPending ? (
               <>
                 <span className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-white" />
-                Analyzing...
+                {t("Đang phân tích…", "Analyzing...")}
               </>
             ) : (
               <>
-                <Plus className="w-3.5 h-3.5" /> New Analysis
+                <Plus className="w-3.5 h-3.5" /> {t("Phân tích mới", "New Analysis")}
               </>
             )}
           </button>
@@ -633,12 +671,12 @@ function AIAnalysisSection({
                   )}
                 </button>
                 <div className="flex items-center gap-3 shrink-0">
-                  <span className="text-muted-foreground">{h.reviewsAnalyzed} reviews</span>
-                  <span className={cn("font-semibold", sentimentLabel(h.sentimentScore).cls)}>{h.sentimentScore}/100</span>
+                  <span className="text-muted-foreground">{h.reviewsAnalyzed} {t("bình luận", "reviews")}</span>
+                  <span className={cn("font-semibold", sentimentScoreUiLabel(h.sentimentScore, contentLang).cls)}>{h.sentimentScore}/100</span>
                   <button
                     onClick={(e) => { e.stopPropagation(); if (h.analyzedAt) handleDelete(h.analyzedAt); }}
                     className="p-1 rounded hover:bg-red-500/10 text-muted-foreground hover:text-red-500 transition-colors"
-                    title="Delete this analysis"
+                    title={t("Xóa phân tích này", "Delete this analysis")}
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
@@ -652,7 +690,7 @@ function AIAnalysisSection({
                 onClick={handleDeleteAll}
                 className="text-xs text-red-500 hover:text-red-600 flex items-center gap-1 transition-colors"
               >
-                <Trash2 className="w-3 h-3" /> Delete all analyses
+                <Trash2 className="w-3 h-3" /> {t("Xóa tất cả phân tích", "Delete all analyses")}
               </button>
             </div>
           )}
@@ -661,23 +699,33 @@ function AIAnalysisSection({
 
       {viewingIdx != null && (
         <div className="mb-3 flex items-center gap-2">
-          <span className="text-xs bg-amber-500/10 text-amber-600 px-2 py-0.5 rounded font-medium">Viewing historical analysis</span>
-          <button onClick={() => setViewingIdx(null)} className="text-xs text-primary hover:underline">View latest</button>
+          <span className="text-xs bg-amber-500/10 text-amber-600 px-2 py-0.5 rounded font-medium">
+            {t("Đang xem phân tích cũ", "Viewing historical analysis")}
+          </span>
+          <button onClick={() => setViewingIdx(null)} className="text-xs text-primary hover:underline">
+            {t("Xem bản mới nhất", "View latest")}
+          </button>
         </div>
       )}
 
       <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3 flex-wrap">
-        <span className="font-medium text-foreground">{totalReviews} reviews analyzed</span>
-        {displayed.dateRangeStart && displayed.dateRangeEnd && (
+        <span className="font-medium text-foreground">
+          {totalReviews} {t("bình luận đã phân tích", "reviews analyzed")}
+        </span>
+        {view!.dateRangeStart && view!.dateRangeEnd && (
           <>
             <span>|</span>
-            <span>Reviews from: {displayed.dateRangeStart} — {displayed.dateRangeEnd}</span>
+            <span>
+              {t("Bình luận trong khoảng:", "Reviews from:")} {view!.dateRangeStart} — {view!.dateRangeEnd}
+            </span>
           </>
         )}
-        {displayed.analyzedAt && (
+        {view!.analyzedAt && (
           <>
             <span>|</span>
-            <span>Analyzed: {new Date(displayed.analyzedAt).toLocaleString()}</span>
+            <span>
+              {t("Phân tích lúc:", "Analyzed:")} {new Date(view!.analyzedAt).toLocaleString()}
+            </span>
           </>
         )}
       </div>
@@ -686,33 +734,37 @@ function AIAnalysisSection({
         {Object.entries(buckets).map(([label, count]) => (
           <span key={label} className="flex items-center gap-1">
             <span className={cn("w-2 h-2 rounded-full", BUCKET_COLORS[label] ?? "bg-gray-400")} />
-            {label}: {count}
+            {bucketDisplayName(label, contentLang)}: {count}
           </span>
         ))}
       </div>
 
+      {localizing && contentLang === "en" && (
+        <p className="text-xs text-muted-foreground mb-2">{t("Đang dịch sang tiếng Anh…", "Translating to English…")}</p>
+      )}
+
       <div className="bg-muted/30 rounded-lg p-4 mb-4">
-        <p className="text-sm leading-relaxed">{displayed.summary}</p>
+        <AnalysisBulletBlock items={getSummaryBullets(view!)} className="list-disc space-y-1.5 pl-5 text-sm leading-relaxed text-muted-foreground" />
       </div>
 
-      {displayed.recentTrend && (
+      {getRecentTrendBullets(view!).length > 0 && (
         <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 mb-4">
-          <h4 className="text-xs font-medium text-blue-500 mb-1 flex items-center gap-1">
-            <TrendingUp className="w-3 h-3" /> Recent Trend
+          <h4 className="text-xs font-medium text-blue-500 mb-2 flex items-center gap-1">
+            <TrendingUp className="w-3 h-3" /> {t("Xu hướng gần đây", "Recent Trend")}
           </h4>
-          <p className="text-sm text-muted-foreground">{displayed.recentTrend}</p>
+          <AnalysisBulletBlock items={getRecentTrendBullets(view!)} className="list-disc space-y-1.5 pl-5 text-sm text-muted-foreground" />
         </div>
       )}
 
-      <SentimentScoreSection score={displayed.sentimentScore} breakdown={displayed.sentimentBreakdown} />
+      <SentimentScoreSection score={view!.sentimentScore} breakdown={view!.sentimentBreakdown} />
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
-        <FeedbackSection items={displayed.strengths} type="strength" />
-        <FeedbackSection items={displayed.weaknesses} type="weakness" />
+        <FeedbackSection items={view!.strengths} type="strength" />
+        <FeedbackSection items={view!.weaknesses} type="weakness" />
       </div>
 
       <div className="mb-5">
-        <h4 className="text-sm font-medium mb-3">Review Distribution</h4>
+        <h4 className="text-sm font-medium mb-3">{t("Phân bố cảm xúc bình luận", "Review Distribution")}</h4>
         <div className="flex gap-0.5 h-8 rounded-lg overflow-hidden">
           {Object.entries(buckets).map(([label, count]) => {
             const pct = totalReviews > 0 ? (count / totalReviews) * 100 : 0;
@@ -722,7 +774,7 @@ function AIAnalysisSection({
                 key={label}
                 className={cn("flex items-center justify-center transition-all duration-500 text-[10px] font-medium text-white", BUCKET_COLORS[label] ?? "bg-gray-400")}
                 style={{ width: `${pct}%`, opacity: 0.85 }}
-                title={`${label}: ${count} (${pct.toFixed(0)}%)`}
+                title={`${bucketDisplayName(label, contentLang)}: ${count} (${pct.toFixed(0)}%)`}
               >
                 {pct >= 8 && `${count}`}
               </div>
@@ -744,19 +796,19 @@ function AIAnalysisSection({
       </div>
 
       <div>
-        <h4 className="text-sm font-medium mb-3">Topic Relevance</h4>
+        <h4 className="text-sm font-medium mb-3">{t("Mức độ liên quan chủ đề", "Topic Relevance")}</h4>
         <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          {Object.entries(displayed.topics).map(([key, value]) => {
-            const topic = TOPIC_LABELS[key] ?? { label: key, color: "bg-gray-500" };
+          {Object.entries(view!.topics).map(([key, value]) => {
+            const topicColor = TOPIC_COLORS[key] ?? "bg-gray-500";
             return (
               <div key={key} className="space-y-1">
                 <div className="flex justify-between text-xs">
-                  <span className="text-muted-foreground">{topic.label}</span>
+                  <span className="text-muted-foreground">{topicKeyLabel(key, contentLang)}</span>
                   <span className="font-medium">{value}</span>
                 </div>
                 <div className="h-2 bg-muted rounded-full overflow-hidden">
                   <div
-                    className={cn("h-full rounded-full transition-all duration-500", topic.color)}
+                    className={cn("h-full rounded-full transition-all duration-500", topicColor)}
                     style={{ width: `${value}%`, opacity: 0.8 }}
                   />
                 </div>
@@ -774,21 +826,31 @@ function PotentialSection({ detail, days, setDays }: {
   days: number;
   setDays: (d: number) => void;
 }) {
-  const radarData = detail ? [
-    { metric: "Momentum", value: detail.momentum.score },
-    { metric: "Engagement", value: detail.engagement.score },
-    { metric: "Stability", value: detail.stability.score },
-  ] : [];
+  const { t, lang } = useUiCopy();
+  const radarData = useMemo(
+    () =>
+      detail
+        ? [
+            { metric: potentialRadarMetric("Momentum", lang), value: detail.momentum.score },
+            { metric: potentialRadarMetric("Engagement", lang), value: detail.engagement.score },
+            { metric: potentialRadarMetric("Stability", lang), value: detail.stability.score },
+          ]
+        : [],
+    [detail, lang],
+  );
 
   const m = detail?.momentum;
   const e = detail?.engagement;
   const st = detail?.stability;
+  const momL = potentialRadarMetric("Momentum", lang);
+  const engL = potentialRadarMetric("Engagement", lang);
+  const stabL = potentialRadarMetric("Stability", lang);
 
   return (
     <div className="bg-card rounded-xl border border-border p-5">
       <div className="flex items-center justify-between mb-5">
         <h2 className="text-lg font-semibold flex items-center gap-2">
-          <Activity className="w-5 h-5 text-primary" /> Potential Analysis
+          <Activity className="w-5 h-5 text-primary" /> {t("Phân tích tiềm năng", "Potential Analysis")}
         </h2>
         <div className="flex gap-2">
           {[7, 14, 30].map((d) => (
@@ -796,14 +858,16 @@ function PotentialSection({ detail, days, setDays }: {
               className={cn("px-3 py-1 rounded-lg text-xs font-medium transition-colors",
                 days === d ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"
               )}>
-              {d}d
+              {lang === "vi" ? `${d} ngày` : `${d}d`}
             </button>
           ))}
         </div>
       </div>
 
       {!detail ? (
-        <p className="text-muted-foreground text-sm text-center py-8">Not enough data for potential analysis (minimum 2 days required)</p>
+        <p className="text-muted-foreground text-sm text-center py-8">
+          {t("Chưa đủ dữ liệu để phân tích tiềm năng (cần tối thiểu 2 ngày).", "Not enough data for potential analysis (minimum 2 days required)")}
+        </p>
       ) : (
         <div className="space-y-5">
           <div className="grid grid-cols-1 md:grid-cols-6 gap-4 items-center">
@@ -820,18 +884,31 @@ function PotentialSection({ detail, days, setDays }: {
             </div>
             <div className="md:col-span-4 space-y-3">
               <div className="grid grid-cols-3 gap-3">
-                <ScoreCard label="Final Score" value={detail.compositeScore} large />
-                <ScoreCard label="Raw Score" value={detail.rawComposite} />
+                <ScoreCard label={t("Điểm cuối", "Final Score")} value={detail.compositeScore} large />
+                <ScoreCard label={t("Điểm thô", "Raw Score")} value={detail.rawComposite} />
                 <div className="bg-muted/30 rounded-lg p-3">
-                  <p className="text-xs text-muted-foreground">Data Confidence</p>
+                  <p className="text-xs text-muted-foreground">{t("Độ tin cậy dữ liệu", "Data Confidence")}</p>
                   <p className="text-lg font-bold">×{detail.confidence.multiplier}</p>
-                  <p className="text-xs text-muted-foreground">{detail.confidence.dataPoints}/{detail.confidence.analysisDays} days ({detail.confidence.coverage}%)</p>
+                  <p className="text-xs text-muted-foreground">
+                    {detail.confidence.dataPoints}/{detail.confidence.analysisDays} {t("ngày", "days")} ({detail.confidence.coverage}%)
+                  </p>
                 </div>
               </div>
               <div className="bg-muted/20 rounded-lg px-3 py-2 text-[10px] text-muted-foreground space-y-1">
-                <p><span className="font-medium text-foreground">Raw</span> = Momentum×0.2 + Engagement×0.6 + Stability×0.2</p>
-                <p><span className="font-medium text-foreground">Final</span> = Raw × Confidence multiplier ({detail.rawComposite} × {detail.confidence.multiplier} = {detail.compositeScore})</p>
-                <p>Confidence = data coverage ({detail.confidence.coverage}%), range ×0.3 to ×1.0. More days of data = higher confidence.</p>
+                <p>
+                  <span className="font-medium text-foreground">{t("Thô", "Raw")}</span>{" "}
+                  = {momL}×0.2 + {engL}×0.6 + {stabL}×0.2
+                </p>
+                <p>
+                  <span className="font-medium text-foreground">{t("Cuối", "Final")}</span>{" "}
+                  = {t("Thô", "Raw")} × {t("hệ số tin cậy", "Confidence multiplier")} ({detail.rawComposite} × {detail.confidence.multiplier} = {detail.compositeScore})
+                </p>
+                <p>
+                  {t(
+                    `Tin cậy = độ phủ dữ liệu (${detail.confidence.coverage}%), hệ số ×0.3 đến ×1.0. Càng nhiều ngày dữ liệu thì tin cậy càng cao.`,
+                    `Confidence = data coverage (${detail.confidence.coverage}%), range ×0.3 to ×1.0. More days of data = higher confidence.`,
+                  )}
+                </p>
               </div>
             </div>
           </div>
@@ -839,116 +916,134 @@ function PotentialSection({ detail, days, setDays }: {
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             {m && <FactorCard
               icon={<TrendingUp className="w-4 h-4" />}
-              label="Momentum"
+              label={momL}
               weight="20%"
               score={m.score}
-              description="Current rank position + rank movement + peak performance."
+              description={t(
+                "Vị trí xếp hạng hiện tại + biến động xếp hạng + đỉnh cao giai đoạn.",
+                "Current rank position + rank movement + peak performance.",
+              )}
               rows={[
                 {
-                  label: "Current Position",
+                  label: t("Vị trí hiện tại", "Current Position"),
                   badge: "50%",
-                  value: `Avg recent rank: #${m.avgRecentRank}`,
+                  value: t(`Xếp hạng gần đây TB: #${m.avgRecentRank}`, `Avg recent rank: #${m.avgRecentRank}`),
                   details: [`100 - ${m.avgRecentRank} × 0.5 = ${m.positionScore} pts`],
-                  note: "Rank 1 ≈ 100, Rank 50 ≈ 75, Rank 100 ≈ 50, Rank 200 ≈ 0",
+                  note: t("Hạng 1 ≈ 100, hạng 50 ≈ 75, hạng 100 ≈ 50, hạng 200 ≈ 0", "Rank 1 ≈ 100, Rank 50 ≈ 75, Rank 100 ≈ 50, Rank 200 ≈ 0"),
                 },
                 {
-                  label: "Rank Change",
+                  label: t("Thay đổi xếp hạng", "Rank Change"),
                   badge: "25%",
                   value: `#${m.rankStart} → #${m.rankEnd} (${m.change >= 0 ? "+" : ""}${m.change})`,
                   details: [
-                    `Absolute: 50 + ${m.change} = ${m.absoluteScore} pts`,
-                    `Relative: ${m.change} / ${Math.max(m.rankStart - 1, 1)} max climb = ${m.relativeScore} pts`,
-                    `Best of the two = ${m.rankChangeScore} pts`,
+                    t(`Tuyệt đối: 50 + ${m.change} = ${m.absoluteScore} pts`, `Absolute: 50 + ${m.change} = ${m.absoluteScore} pts`),
+                    t(
+                      `Tương đối: ${m.change} / ${Math.max(m.rankStart - 1, 1)} leo tối đa = ${m.relativeScore} pts`,
+                      `Relative: ${m.change} / ${Math.max(m.rankStart - 1, 1)} max climb = ${m.relativeScore} pts`,
+                    ),
+                    t(`Lấy tốt hơn trong hai = ${m.rankChangeScore} pts`, `Best of the two = ${m.rankChangeScore} pts`),
                   ],
-                  note: "Best of absolute or relative — a #2→#1 move gets full credit",
+                  note: t(
+                    "Lấy giá trị tốt hơn giữa tuyệt đối và tương đối — ví dụ #2→#1 được tính trọn điểm.",
+                    "Best of absolute or relative — a #2→#1 move gets full credit",
+                  ),
                 },
                 {
-                  label: "Peak Performance",
+                  label: t("Đỉnh giai đoạn", "Peak Performance"),
                   badge: "25%",
-                  value: `Best rank: #${m.bestRank}`,
+                  value: t(`Hạng tốt nhất: #${m.bestRank}`, `Best rank: #${m.bestRank}`),
                   details: [`100 - ${m.bestRank} × 0.5 = ${m.peakScore} pts`],
-                  note: "The highest rank achieved during the analysis period",
+                  note: t("Hạng cao nhất đạt được trong khoảng phân tích", "The highest rank achieved during the analysis period"),
                 },
                 {
-                  label: "Total",
+                  label: t("Tổng", "Total"),
                   value: `${m.positionScore}×0.5 + ${m.rankChangeScore}×0.25 + ${m.peakScore}×0.25 = ${m.score}`,
                 },
               ]}
             />}
             {e && <FactorCard
               icon={<Activity className="w-4 h-4" />}
-              label="Engagement"
+              label={engL}
               weight="60%"
               score={e.score}
-              description="Are users increasingly interested? Measures rating quality, fan growth, and reserve growth. The most important factor."
+              description={t(
+                "Người chơi có đang quan tâm nhiều hơn? Gồm chất lượng sao, tăng fan và tăng đăng ký trước — trọng số cao nhất.",
+                "Are users increasingly interested? Measures rating quality, fan growth, and reserve growth. The most important factor.",
+              )}
               rows={[
                 ...(e.ratingScore != null ? [{
-                  label: "Rating",
-                  value: `${e.ratingEnd} ★ (${e.ratingDelta >= 0 ? "+" : ""}${e.ratingDelta} change)`,
+                  label: t("Điểm sao", "Rating"),
+                  value: `${e.ratingEnd} ★ (${e.ratingDelta >= 0 ? "+" : ""}${e.ratingDelta} ${t("thay đổi", "change")})`,
                   details: [
-                    `Rating level: (${e.ratingEnd} - 5) × 20 = ${e.ratingBaseScore ?? "–"} pts`,
-                    `Change bonus: 50 + ${e.ratingDelta} × 20 = ${e.ratingChangeScore ?? "–"} pts`,
+                    t(`Mức sao: (${e.ratingEnd} - 5) × 20 = ${e.ratingBaseScore ?? "–"} pts`, `Rating level: (${e.ratingEnd} - 5) × 20 = ${e.ratingBaseScore ?? "–"} pts`),
+                    t(`Thưởng biến động: 50 + ${e.ratingDelta} × 20 = ${e.ratingChangeScore ?? "–"} pts`, `Change bonus: 50 + ${e.ratingDelta} × 20 = ${e.ratingChangeScore ?? "–"} pts`),
                     `${e.ratingBaseScore ?? "–"} × 0.6 + ${e.ratingChangeScore ?? "–"} × 0.4 = ${e.ratingScore} pts`,
                   ],
-                  note: "High-rated games get a strong base. 9★ steady ≈ 68 pts",
-                }] : [{ label: "Rating", value: "N/A (insufficient data)" }]),
+                  note: t("Game sao cao có nền điểm tốt. 9★ ổn định ≈ 68 pts", "High-rated games get a strong base. 9★ steady ≈ 68 pts"),
+                }] : [{ label: t("Điểm sao", "Rating"), value: t("Không đủ dữ liệu", "N/A (insufficient data)") }]),
                 ...(e.fansScore != null ? [{
-                  label: "Fans Growth",
+                  label: t("Tăng fan", "Fans Growth"),
                   value: `${formatNumber(e.fansStart!)} → ${formatNumber(e.fansEnd!)} (+${formatNumber(e.fansGrowth)})`,
                   details: [
-                    `By rate: ${e.fansRate ?? 0}% × 2 = ${e.fansRateScore ?? "–"} pts`,
-                    `By volume: +${formatNumber(e.fansGrowth)} / ${formatNumber(e.absThreshold)} = ${e.fansAbsScore ?? "–"} pts`,
-                    `Best of the two = ${e.fansScore} pts`,
+                    t(`Theo %: ${e.fansRate ?? 0}% × 2 = ${e.fansRateScore ?? "–"} pts`, `By rate: ${e.fansRate ?? 0}% × 2 = ${e.fansRateScore ?? "–"} pts`),
+                    t(`Theo khối lượng: +${formatNumber(e.fansGrowth)} / ${formatNumber(e.absThreshold)} = ${e.fansAbsScore ?? "–"} pts`, `By volume: +${formatNumber(e.fansGrowth)} / ${formatNumber(e.absThreshold)} = ${e.fansAbsScore ?? "–"} pts`),
+                    t(`Lấy tốt hơn trong hai = ${e.fansScore} pts`, `Best of the two = ${e.fansScore} pts`),
                   ],
-                  note: `Threshold scales with period (${formatNumber(e.absThreshold)} for this period)`,
-                }] : [{ label: "Fans Growth", value: "N/A (need ≥ 100 start)" }]),
+                  note: t(`Ngưỡng theo chu kỳ (${formatNumber(e.absThreshold)} cho giai đoạn này)`, `Threshold scales with period (${formatNumber(e.absThreshold)} for this period)`),
+                }] : [{ label: t("Tăng fan", "Fans Growth"), value: t("Không có (cần ≥ 100 fan ban đầu)", "N/A (need ≥ 100 start)") }]),
                 ...(e.resScore != null ? [{
-                  label: "Reserve Growth",
+                  label: t("Tăng đăng ký trước", "Reserve Growth"),
                   value: `${formatNumber(e.resStart!)} → ${formatNumber(e.resEnd!)} (+${formatNumber(e.resGrowth)})`,
                   details: [
-                    `By rate: ${e.resRate ?? 0}% × 2 = ${e.resRateScore ?? "–"} pts`,
-                    `By volume: +${formatNumber(e.resGrowth)} / ${formatNumber(e.absThreshold)} = ${e.resAbsScore ?? "–"} pts`,
-                    `Best of the two = ${e.resScore} pts`,
+                    t(`Theo %: ${e.resRate ?? 0}% × 2 = ${e.resRateScore ?? "–"} pts`, `By rate: ${e.resRate ?? 0}% × 2 = ${e.resRateScore ?? "–"} pts`),
+                    t(`Theo khối lượng: +${formatNumber(e.resGrowth)} / ${formatNumber(e.absThreshold)} = ${e.resAbsScore ?? "–"} pts`, `By volume: +${formatNumber(e.resGrowth)} / ${formatNumber(e.absThreshold)} = ${e.resAbsScore ?? "–"} pts`),
+                    t(`Lấy tốt hơn trong hai = ${e.resScore} pts`, `Best of the two = ${e.resScore} pts`),
                   ],
-                  note: "Best of % growth or absolute volume",
-                }] : [{ label: "Reserve Growth", value: "N/A (need ≥ 50 start)" }]),
+                  note: t("Lấy tốt hơn giữa tăng % và tăng tuyệt đối", "Best of % growth or absolute volume"),
+                }] : [{ label: t("Tăng đăng ký trước", "Reserve Growth"), value: t("Không có (cần ≥ 50 đăng ký ban đầu)", "N/A (need ≥ 50 start)") }]),
                 {
-                  label: "Total",
-                  value: `avg of ${e.subsCount} metric${e.subsCount !== 1 ? "s" : ""} = ${e.score}`,
-                  note: "Missing metrics excluded, not counted as 0",
+                  label: t("Tổng", "Total"),
+                  value: t(
+                    `Trung bình ${e.subsCount} chỉ số = ${e.score}`,
+                    `avg of ${e.subsCount} metric${e.subsCount !== 1 ? "s" : ""} = ${e.score}`,
+                  ),
+                  note: t("Chỉ số thiếu được bỏ qua, không tính bằng 0", "Missing metrics excluded, not counted as 0"),
                 },
               ]}
             />}
             {st && <FactorCard
               icon={<Shield className="w-4 h-4" />}
-              label="Stability"
+              label={stabL}
               weight="20%"
               score={st.score}
-              description="Is the game consistently ranked? Rewards daily presence with low rank fluctuation."
+              description={t(
+                "Game có ổn định trong bảng xếp hạng không? Thưởng số ngày có mặt và độ dao động hạng thấp.",
+                "Is the game consistently ranked? Rewards daily presence with low rank fluctuation.",
+              )}
               rows={[
                 {
-                  label: "Presence",
+                  label: t("Hiện diện", "Presence"),
                   badge: "50%",
-                  value: `${st.daysInTop}/${st.analysisDays} days in Top 200`,
+                  value: t(`${st.daysInTop}/${st.analysisDays} ngày trong Top 200`, `${st.daysInTop}/${st.analysisDays} days in Top 200`),
                   details: [`(${st.daysInTop} / ${st.analysisDays}) × 100 = ${st.presenceScore} pts`],
-                  note: "Days the game appeared in Top 200",
+                  note: t("Số ngày game xuất hiện trong Top 200", "Days the game appeared in Top 200"),
                 },
                 {
-                  label: "Low Volatility",
+                  label: t("Biến động thấp", "Low Volatility"),
                   badge: "30%",
-                  value: `Std dev = ${st.stdDev}`,
+                  value: t(`Độ lệch chuẩn = ${st.stdDev}`, `Std dev = ${st.stdDev}`),
                   details: [`100 - ${st.stdDev} × 2 = ${st.volatilityScore} pts`],
-                  note: "Low fluctuation = high score. σ≥50 → 0 pts",
+                  note: t("Dao động thấp = điểm cao. σ≥50 → 0 pts", "Low fluctuation = high score. σ≥50 → 0 pts"),
                 },
                 {
-                  label: "Streak",
+                  label: t("Chuỗi ngày liên tiếp", "Streak"),
                   badge: "20%",
-                  value: `${st.maxStreak} consecutive days`,
+                  value: t(`${st.maxStreak} ngày liên tiếp`, `${st.maxStreak} consecutive days`),
                   details: [`(${st.maxStreak} / ${st.analysisDays}) × 100 = ${st.streakScore} pts`],
-                  note: "Longest unbroken streak in Top 200",
+                  note: t("Chuỗi dài nhất liên tục trong Top 200", "Longest unbroken streak in Top 200"),
                 },
                 {
-                  label: "Total",
+                  label: t("Tổng", "Total"),
                   value: `${st.presenceScore}×0.5 + ${st.volatilityScore}×0.3 + ${st.streakScore}×0.2 = ${st.score}`,
                 },
               ]}
