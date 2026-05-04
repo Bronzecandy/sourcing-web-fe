@@ -14,6 +14,7 @@ const Ranking = lazy(() => import("./pages/Ranking"));
 const GameDetail = lazy(() => import("./pages/GameDetail"));
 const Potential = lazy(() => import("./pages/Potential"));
 const AIAnalysis = lazy(() => import("./pages/AIAnalysis"));
+const Libraries = lazy(() => import("./pages/Libraries"));
 
 function PageLoader() {
   return (
@@ -54,6 +55,7 @@ export default function App() {
               <Route path="/game/:id" element={<GameDetail />} />
               <Route path="/potential" element={<Potential />} />
               <Route path="/ai-analysis" element={<AIAnalysis />} />
+              <Route path="/libraries" element={<Libraries />} />
             </Route>
           </Routes>
         </Suspense>

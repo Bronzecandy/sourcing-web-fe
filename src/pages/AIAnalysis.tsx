@@ -1,23 +1,18 @@
-import { useState, useRef, useMemo } from "react";
+import { useState, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useContentLang } from "@/lib/content-language";
-import { localizeAnalysisToEn, getSummaryBullets, getRecentTrendBullets } from "@/lib/analysis-localize";
+import { localizeAnalysisToEn, getSummaryBullets, getRecentTrendBullets, mainAnalysisScore } from "@/lib/analysis-localize";
 import { AnalysisBulletBlock } from "@/components/AnalysisBulletBlock";
-import {
-  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
-} from "recharts";
+import RubricPanel from "@/components/RubricPanel";
+import RedFlagSection from "@/components/RedFlagSection";
 import { Brain, Search, Sparkles, ExternalLink, Clock, Trash2, Globe, Upload, FileSpreadsheet, X } from "lucide-react";
 import { triggerExternalAnalysis, triggerCsvAnalysis, deleteAnalysis, fetchAllAnalyses } from "@/services/api";
 import { cn, getScoreColor } from "@/lib/utils";
 import {
   useUiCopy,
   bucketDisplayName,
-  topicKeyLabel,
-  tierMentionLabel,
-  sentimentScoreUiLabel,
 } from "@/lib/use-ui-copy";
-import type { AiAnalysis, AIFeedbackItem, SentimentBreakdown } from "@/types";
+import type { AiAnalysis } from "@/types";
 
 const BUCKET_COLORS: Record<string, string> = {
   "Very Negative": "bg-red-500",
@@ -26,63 +21,6 @@ const BUCKET_COLORS: Record<string, string> = {
   "Positive": "bg-green-500",
   "Very Positive": "bg-emerald-500",
 };
-
-const TIER_ROW_STYLE: Record<string, { color: string }> = {
-  frequent: { color: "text-foreground" },
-  moderate: { color: "text-muted-foreground" },
-  rare: { color: "text-muted-foreground/60" },
-};
-
-function FeedbackSection({ items, type }: { items: AIFeedbackItem[]; type: "strength" | "weakness" }) {
-  const { t, lang } = useUiCopy();
-  const isStrength = type === "strength";
-  const grouped = {
-    frequent: items.filter((i) => i.tier === "frequent"),
-    moderate: items.filter((i) => i.tier === "moderate"),
-    rare: items.filter((i) => i.tier === "rare"),
-  };
-
-  return (
-    <div className="border border-border/50 rounded-lg p-4">
-      <h4 className={cn("text-sm font-medium mb-3 flex items-center gap-1", isStrength ? "text-emerald-500" : "text-red-500")}>
-        <span className={cn("w-2 h-2 rounded-full", isStrength ? "bg-emerald-500" : "bg-red-500")} />
-        {isStrength ? t("Điểm mạnh", "Strengths") : t("Điểm yếu", "Weaknesses")}
-      </h4>
-      <div className="space-y-3">
-        {(["frequent", "moderate", "rare"] as const).map((tier) => {
-          const group = grouped[tier];
-          if (group.length === 0) return null;
-          const tierStyle = TIER_ROW_STYLE[tier];
-          return (
-            <div key={tier}>
-              <p className={cn("text-[10px] font-medium uppercase tracking-wide mb-1.5", tierStyle?.color ?? "text-muted-foreground")}>
-                {tierMentionLabel(tier, lang)}
-              </p>
-              <ul className="space-y-1.5">
-                {group.map((item, i) => (
-                  <li key={i} className="text-sm flex items-start gap-2">
-                    <span className={cn("mt-0.5 shrink-0", isStrength ? "text-emerald-500" : "text-red-500")}>
-                      {isStrength ? "✓" : "✗"}
-                    </span>
-                    <span className="flex-1 text-muted-foreground">{item.point}</span>
-                    <span className={cn(
-                      "text-xs font-semibold px-1.5 py-0.5 rounded shrink-0",
-                      item.mentionRate >= 30 ? "bg-primary/10 text-primary" :
-                      item.mentionRate >= 10 ? "bg-muted text-muted-foreground" :
-                      "bg-muted/50 text-muted-foreground/70"
-                    )}>
-                      {item.mentionRate}%
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
 
 export default function AIAnalysisPage() {
   const [input, setInput] = useState("");
@@ -156,29 +94,6 @@ export default function AIAnalysisPage() {
   };
 
   const analyses = savedAnalyses;
-
-  const topicData = useMemo(
-    () =>
-      selectedView
-        ? Object.entries(selectedView.topics).map(([key, value]) => ({
-            name: topicKeyLabel(key, lang),
-            value,
-          }))
-        : [],
-    [selectedView, lang],
-  );
-
-  const radarData = useMemo(
-    () =>
-      selectedView
-        ? Object.entries(selectedView.topics).map(([key, value]) => ({
-            subject: topicKeyLabel(key, lang),
-            A: value,
-            fullMark: 100,
-          }))
-        : [],
-    [selectedView, lang],
-  );
 
   return (
     <div className="space-y-6">
@@ -372,8 +287,8 @@ export default function AIAnalysisPage() {
                         </button>
                       </div>
                       <div className="flex items-center gap-2 mt-1">
-                        <span className={cn("text-xs font-bold", getScoreColor(a.sentimentScore))}>
-                          {a.sentimentScore}/100
+                        <span className={cn("text-xs font-bold", getScoreColor(mainAnalysisScore(a)))}>
+                          {mainAnalysisScore(a)}/100
                         </span>
                         <span className="text-[10px] text-muted-foreground">
                           {a.reviewsAnalyzed} {t("bình luận", "reviews")}
@@ -452,23 +367,37 @@ export default function AIAnalysisPage() {
                   </div>
                 </div>
                 <div className="text-right shrink-0">
-                  <div className={cn("text-2xl font-bold", sentimentScoreUiLabel(selectedView.sentimentScore, contentLang).cls)}>
-                    {selectedView.sentimentScore}
+                  <div className={cn("text-2xl font-bold", getScoreColor(mainAnalysisScore(selectedView)))}>
+                    {mainAnalysisScore(selectedView)}
                   </div>
-                  <div className={cn("text-xs font-medium", sentimentScoreUiLabel(selectedView.sentimentScore, contentLang).cls)}>
-                    {sentimentScoreUiLabel(selectedView.sentimentScore, contentLang).text}
+                  <div className="text-[10px] text-muted-foreground">
+                    {t("Điểm rubric (có trọng số)", "Weighted rubric")}
                   </div>
                 </div>
               </div>
             </div>
 
+            <RedFlagSection
+              redFlagAtAGlance={selectedView.redFlagAtAGlance}
+              redFlagsChecklist={selectedView.redFlagsChecklist}
+              rubric={selectedView.rubric}
+            />
+
             {/* Stats Row */}
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <StatCard label={t("Bình luận đã phân tích", "Reviews Analyzed")} value={selectedView.reviewsAnalyzed} />
-              <StatCard label={t("Điểm cảm xúc", "Sentiment Score")} value={`${selectedView.sentimentScore}/100`} />
-              <StatCard label={t("Điểm mạnh", "Strengths")} value={selectedView.strengths.length} />
-              <StatCard label={t("Điểm yếu", "Weaknesses")} value={selectedView.weaknesses.length} />
+              <StatCard label={t("Điểm rubric", "Rubric score")} value={`${mainAnalysisScore(selectedView)}/100`} />
+              <StatCard
+                label={t("Thang 1–5", "Band (1–5)")}
+                value={selectedView.rubric?.aggregate.band5 ?? "—"}
+              />
+              <StatCard
+                label={t("Tiêu chí điểm thấp (dưới 30)", "Low-score criteria (<30)")}
+                value={selectedView.rubric?.aggregate.lowScoreCriteriaCount ?? "—"}
+              />
             </div>
+
+            <RubricPanel rubric={selectedView.rubric} />
 
             {/* Bucket Distribution */}
             {selectedView.bucketCounts && Object.keys(selectedView.bucketCounts).length > 0 && (
@@ -502,11 +431,6 @@ export default function AIAnalysisPage() {
               </div>
             )}
 
-            {/* Sentiment Breakdown */}
-            {selectedView.sentimentBreakdown && (
-              <SentimentBreakdownCard breakdown={selectedView.sentimentBreakdown} score={selectedView.sentimentScore} />
-            )}
-
             {/* Summary + Trend */}
             <div className="bg-card rounded-xl border border-border p-5">
               <h4 className="text-sm font-medium mb-2">{t("Tóm tắt", "Summary")}</h4>
@@ -518,41 +442,6 @@ export default function AIAnalysisPage() {
                 </>
               )}
             </div>
-
-            {/* Strengths + Weaknesses */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <FeedbackSection items={selectedView.strengths} type="strength" />
-              <FeedbackSection items={selectedView.weaknesses} type="weakness" />
-            </div>
-
-            {/* Topics */}
-            {topicData.length > 0 && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-card rounded-xl border border-border p-5">
-                  <h4 className="text-sm font-medium mb-3">{t("Mức độ liên quan chủ đề", "Topic Relevance")}</h4>
-                  <ResponsiveContainer width="100%" height={220}>
-                    <BarChart data={topicData} layout="vertical">
-                      <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
-                      <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 11 }} />
-                      <YAxis type="category" dataKey="name" width={90} tick={{ fontSize: 11 }} />
-                      <Tooltip />
-                      <Bar dataKey="value" fill="hsl(var(--primary))" radius={[0, 4, 4, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                </div>
-                <div className="bg-card rounded-xl border border-border p-5">
-                  <h4 className="text-sm font-medium mb-3">{t("Radar chủ đề", "Topic Radar")}</h4>
-                  <ResponsiveContainer width="100%" height={220}>
-                    <RadarChart data={radarData}>
-                      <PolarGrid stroke="hsl(var(--border))" />
-                      <PolarAngleAxis dataKey="subject" tick={{ fontSize: 10 }} />
-                      <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fontSize: 9 }} />
-                      <Radar dataKey="A" stroke="hsl(var(--primary))" fill="hsl(var(--primary))" fillOpacity={0.3} />
-                    </RadarChart>
-                  </ResponsiveContainer>
-                </div>
-              </div>
-            )}
           </div>
         ) : (
           <div className="lg:col-span-2 flex items-center justify-center">
@@ -579,80 +468,6 @@ function StatCard({ label, value }: { label: string; value: string | number }) {
     <div className="bg-card rounded-xl border border-border p-3 text-center">
       <div className="text-lg font-bold">{value}</div>
       <div className="text-[10px] text-muted-foreground uppercase tracking-wide">{label}</div>
-    </div>
-  );
-}
-
-type SentimentCriterionKey = "ratingDistribution" | "textSentiment" | "issueSeverity" | "trendMomentum";
-
-function criterionColor(score: number) {
-  if (score >= 75) return "text-emerald-500";
-  if (score >= 50) return "text-green-500";
-  if (score >= 35) return "text-amber-500";
-  return "text-red-500";
-}
-
-function criterionBg(score: number) {
-  if (score >= 75) return "bg-emerald-500";
-  if (score >= 50) return "bg-green-500";
-  if (score >= 35) return "bg-amber-500";
-  return "bg-red-500";
-}
-
-function SentimentBreakdownCard({ breakdown, score }: { breakdown: SentimentBreakdown; score: number }) {
-  const { t, lang } = useUiCopy();
-  const sent = sentimentScoreUiLabel(score, lang);
-  const criteria: Array<{
-    key: SentimentCriterionKey;
-    label: string;
-    weight: string;
-    icon: string;
-  }> = [
-    { key: "ratingDistribution", label: t("Phân bố sao", "Rating Distribution"), weight: "30%", icon: "⭐" },
-    { key: "textSentiment", label: t("Cảm xúc trong lời văn", "Text Sentiment"), weight: "35%", icon: "💬" },
-    { key: "issueSeverity", label: t("Mức độ nghiêm trọng vấn đề", "Issue Severity"), weight: "20%", icon: "🔧" },
-    { key: "trendMomentum", label: t("Xu hướng theo thời gian", "Trend Momentum"), weight: "15%", icon: "📈" },
-  ];
-
-  return (
-    <div className="bg-card rounded-xl border border-border p-5">
-      <div className="flex items-center justify-between mb-3">
-        <h4 className="text-sm font-semibold">{t("Chi tiết điểm cảm xúc", "Sentiment Score Breakdown")}</h4>
-        <div className="flex items-center gap-2">
-          <span className={cn("text-xl font-bold", sent.cls)}>{score}/100</span>
-          <span className={cn("text-xs font-medium px-2 py-0.5 rounded-full",
-            score >= 60 ? "bg-emerald-500/10 text-emerald-500" : score >= 40 ? "bg-amber-500/10 text-amber-500" : "bg-red-500/10 text-red-500"
-          )}>{sent.text}</span>
-        </div>
-      </div>
-      <div className="space-y-3">
-        {criteria.map((c) => {
-          const criterion = breakdown[c.key];
-          if (!criterion) return null;
-          return (
-            <div key={c.key} className="bg-muted/30 rounded-lg p-3">
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs font-medium flex items-center gap-1.5">
-                  <span>{c.icon}</span> {c.label}
-                  <span className="text-muted-foreground font-normal">({c.weight})</span>
-                </span>
-                <span className={cn("text-sm font-bold", criterionColor(criterion.score))}>
-                  {criterion.score}/100
-                </span>
-              </div>
-              <div className="h-1.5 bg-muted rounded-full overflow-hidden mb-1.5">
-                <div className={cn("h-full rounded-full transition-all", criterionBg(criterion.score))} style={{ width: `${criterion.score}%` }} />
-              </div>
-              <p className="text-[11px] text-muted-foreground leading-relaxed">{criterion.reasoning}</p>
-            </div>
-          );
-        })}
-        {breakdown.formula && (
-          <p className="text-[11px] text-muted-foreground/80 italic border-t border-border/30 pt-2">
-            {breakdown.formula}
-          </p>
-        )}
-      </div>
     </div>
   );
 }

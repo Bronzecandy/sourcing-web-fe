@@ -5,6 +5,7 @@ import {
   TrendingUp,
   Brain,
   Gamepad2,
+  Library,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -13,6 +14,7 @@ const NAV_ITEMS = [
   { to: "/ranking", icon: Trophy, label: "Top 200 Ranking" },
   { to: "/potential", icon: TrendingUp, label: "Potential Analysis" },
   { to: "/ai-analysis", icon: Brain, label: "AI Review Analysis" },
+  { to: "/libraries", icon: Library, label: "Rubric Libraries" },
 ];
 
 export default function Sidebar() {

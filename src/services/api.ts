@@ -10,6 +10,7 @@ import type {
   GamePotentialDetail,
   AiAnalysis,
   ApiResponse,
+  LibraryPendingItem,
 } from "../types";
 
 const api = axios.create({
@@ -182,4 +183,65 @@ export async function triggerCsvAnalysis(file: File): Promise<AiAnalysis> {
     headers: { "Content-Type": "multipart/form-data" },
   });
   return data.data;
+}
+
+// —— Rubric library JSON (backend: /api/libraries) ——
+
+export async function fetchLibraryFileList(): Promise<string[]> {
+  const { data } = await api.get<{ success: boolean; data: string[] }>("/libraries/files");
+  if (!data.success) throw new Error("Không tải được danh sách file thư viện");
+  return data.data;
+}
+
+export async function fetchLibraryJson(id: string): Promise<unknown> {
+  const { data } = await api.get<{ success: boolean; data: unknown }>(`/libraries/${encodeURIComponent(id)}`);
+  if (!data.success) throw new Error("Không đọc được file thư viện");
+  return data.data;
+}
+
+export async function putLibraryJson(id: string, body: unknown): Promise<void> {
+  const { data } = await api.put<{ success: boolean; error?: string }>(
+    `/libraries/${encodeURIComponent(id)}`,
+    body,
+  );
+  if (!data.success) throw new Error(data.error || "Lưu thất bại");
+}
+
+export async function fetchLibraryPending(): Promise<LibraryPendingItem[]> {
+  const { data } = await api.get<{ success: boolean; data: LibraryPendingItem[] }>("/libraries/pending");
+  if (!data.success) throw new Error("Không tải được danh sách pending");
+  return data.data;
+}
+
+export async function mergeLibraryPending(
+  id: string,
+  body: {
+    score?: number;
+    tier?: string;
+    keywordsEn?: string;
+    maxMb?: number;
+    maxDaysSinceUpdate?: number;
+    minFans?: number;
+    ruleLabel?: string;
+  } = {},
+): Promise<void> {
+  const { data } = await api.post<{ success: boolean; error?: string }>(
+    `/libraries/pending/${encodeURIComponent(id)}/merge`,
+    body,
+  );
+  if (!data.success) throw new Error(data.error || "Merge failed");
+}
+
+export async function deleteLibraryPending(id: string): Promise<void> {
+  const { data } = await api.delete<{ success: boolean }>(`/libraries/pending/${encodeURIComponent(id)}`);
+  if (!data.success) throw new Error("Xóa pending thất bại");
+}
+
+export async function appendLibraryStudio(input: {
+  names: string[];
+  score: number;
+  tier?: string;
+}): Promise<void> {
+  const { data } = await api.post<{ success: boolean; error?: string }>("/libraries/studio", input);
+  if (!data.success) throw new Error(data.error || "Thêm studio thất bại");
 }

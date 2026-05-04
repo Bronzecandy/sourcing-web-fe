@@ -8,18 +8,17 @@ import {
 import { ArrowLeft, Brain, Star, Users, Heart, MessageSquare, TrendingUp, Activity, Shield, Database, History, ChevronDown, ChevronUp, Trash2, Plus, Sparkles } from "lucide-react";
 import { fetchGameDetail, fetchGameReviews, triggerAnalysis, fetchGamePotentialDetail, fetchLatestAnalysis, fetchAnalysisHistory, deleteAnalysis } from "@/services/api";
 import { useContentLang } from "@/lib/content-language";
-import { localizeAnalysisToEn, getSummaryBullets, getRecentTrendBullets } from "@/lib/analysis-localize";
+import { localizeAnalysisToEn, getSummaryBullets, getRecentTrendBullets, mainAnalysisScore } from "@/lib/analysis-localize";
 import { AnalysisBulletBlock } from "@/components/AnalysisBulletBlock";
+import RubricPanel from "@/components/RubricPanel";
+import RedFlagSection from "@/components/RedFlagSection";
 import {
   useUiCopy,
   potentialRadarMetric,
-  sentimentScoreUiLabel,
   bucketDisplayName,
-  topicKeyLabel,
-  tierMentionLabel,
 } from "@/lib/use-ui-copy";
 import { cn, formatNumber, getScoreColor } from "@/lib/utils";
-import type { AiAnalysis, AIFeedbackItem, SentimentBreakdown, GameReview, GamePotentialDetail } from "@/types";
+import type { AiAnalysis, GameReview, GamePotentialDetail } from "@/types";
 
 const BUCKET_COLORS: Record<string, string> = {
   "Very Negative": "bg-red-500",
@@ -35,21 +34,6 @@ const STAR_COLORS: Record<string, string> = {
   "3": "bg-amber-500",
   "4": "bg-green-500",
   "5": "bg-emerald-500",
-};
-
-const TOPIC_COLORS: Record<string, string> = {
-  gameplay: "bg-blue-500",
-  graphics: "bg-purple-500",
-  story: "bg-amber-500",
-  monetization: "bg-red-500",
-  performance: "bg-emerald-500",
-  community: "bg-cyan-500",
-};
-
-const TIER_ROW_STYLE: Record<string, { color: string }> = {
-  frequent: { color: "text-foreground" },
-  moderate: { color: "text-muted-foreground" },
-  rare: { color: "text-muted-foreground/60" },
 };
 
 export default function GameDetail() {
@@ -380,148 +364,6 @@ function ReviewDistributionCard({ distribution, actualCount }: { distribution: R
   );
 }
 
-function FeedbackSection({ items, type }: { items: AIFeedbackItem[]; type: "strength" | "weakness" }) {
-  const { t, lang } = useUiCopy();
-  const isStrength = type === "strength";
-  const groupedByTier = {
-    frequent: items.filter((i) => i.tier === "frequent"),
-    moderate: items.filter((i) => i.tier === "moderate"),
-    rare: items.filter((i) => i.tier === "rare"),
-  };
-
-  return (
-    <div className="border border-border/50 rounded-lg p-4">
-      <h4 className={cn("text-sm font-medium mb-3 flex items-center gap-1", isStrength ? "text-emerald-500" : "text-red-500")}>
-        <span className={cn("w-2 h-2 rounded-full", isStrength ? "bg-emerald-500" : "bg-red-500")} />
-        {isStrength ? t("Điểm mạnh", "Strengths") : t("Điểm yếu", "Weaknesses")}
-      </h4>
-      <div className="space-y-3">
-        {(["frequent", "moderate", "rare"] as const).map((tier) => {
-          const group = groupedByTier[tier];
-          if (group.length === 0) return null;
-          const tierStyle = TIER_ROW_STYLE[tier];
-          return (
-            <div key={tier}>
-              <p className={cn("text-[10px] font-medium uppercase tracking-wide mb-1.5", tierStyle?.color ?? "text-muted-foreground")}>
-                {tierMentionLabel(tier, lang)}
-              </p>
-              <ul className="space-y-1.5">
-                {group.map((item, i) => (
-                  <li key={i} className="text-sm flex items-start gap-2">
-                    <span className={cn("mt-0.5 shrink-0", isStrength ? "text-emerald-500" : "text-red-500")}>
-                      {isStrength ? "✓" : "✗"}
-                    </span>
-                    <span className="flex-1 text-muted-foreground">{item.point}</span>
-                    <span className={cn(
-                      "text-xs font-semibold px-1.5 py-0.5 rounded shrink-0",
-                      item.mentionRate >= 30 ? "bg-primary/10 text-primary" :
-                      item.mentionRate >= 10 ? "bg-muted text-muted-foreground" :
-                      "bg-muted/50 text-muted-foreground/70"
-                    )}>
-                      {item.mentionRate}%
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function scoreColor(score: number) {
-  if (score >= 75) return "text-emerald-500";
-  if (score >= 50) return "text-green-500";
-  if (score >= 35) return "text-amber-500";
-  return "text-red-500";
-}
-
-function scoreBg(score: number) {
-  if (score >= 75) return "bg-emerald-500";
-  if (score >= 50) return "bg-green-500";
-  if (score >= 35) return "bg-amber-500";
-  return "bg-red-500";
-}
-
-type SentimentCriterionKey = "ratingDistribution" | "textSentiment" | "issueSeverity" | "trendMomentum";
-
-function SentimentScoreSection({ score, breakdown }: { score: number; breakdown?: SentimentBreakdown }) {
-  const { t, lang } = useUiCopy();
-  const sent = sentimentScoreUiLabel(score, lang);
-  const criteria: Array<{
-    key: SentimentCriterionKey;
-    label: string;
-    weight: string;
-    icon: string;
-  }> = [
-    { key: "ratingDistribution", label: t("Phân bố sao", "Rating Distribution"), weight: "30%", icon: "⭐" },
-    { key: "textSentiment", label: t("Cảm xúc trong lời văn", "Text Sentiment"), weight: "35%", icon: "💬" },
-    { key: "issueSeverity", label: t("Mức độ nghiêm trọng vấn đề", "Issue Severity"), weight: "20%", icon: "🔧" },
-    { key: "trendMomentum", label: t("Xu hướng theo thời gian", "Trend Momentum"), weight: "15%", icon: "📈" },
-  ];
-
-  return (
-    <div className="mb-5 border border-border/50 rounded-lg p-4">
-      <div className="flex items-center justify-between mb-3">
-        <h4 className="text-sm font-semibold">{t("Điểm cảm xúc cộng đồng", "Social Sentiment Score")}</h4>
-        <div className="flex items-center gap-2">
-          <span className={cn("text-xl font-bold", sent.cls)}>{score}</span>
-          <span className={cn("text-xs font-medium px-2 py-0.5 rounded-full", sent.cls,
-            score >= 60 ? "bg-emerald-500/10" : score >= 40 ? "bg-amber-500/10" : "bg-red-500/10"
-          )}>{sent.text}</span>
-        </div>
-      </div>
-
-      <div className="h-2.5 bg-muted rounded-full overflow-hidden mb-4">
-        <div
-          className="h-full rounded-full transition-all duration-700"
-          style={{ width: `${score}%`, background: "linear-gradient(90deg, #ef4444, #f59e0b, #22c55e)" }}
-        />
-      </div>
-
-      {breakdown ? (
-        <div className="space-y-3">
-          <p className="text-[10px] text-muted-foreground uppercase tracking-wide font-medium">
-            {t("Chi tiết điểm", "Score Breakdown")}
-          </p>
-          {criteria.map((c) => {
-            const criterion = breakdown[c.key];
-            if (!criterion) return null;
-            return (
-              <div key={c.key} className="bg-muted/30 rounded-lg p-3">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-medium flex items-center gap-1.5">
-                    <span>{c.icon}</span> {c.label}
-                    <span className="text-muted-foreground font-normal">({c.weight})</span>
-                  </span>
-                  <span className={cn("text-sm font-bold", scoreColor(criterion.score))}>
-                    {criterion.score}/100
-                  </span>
-                </div>
-                <div className="h-1.5 bg-muted rounded-full overflow-hidden mb-1.5">
-                  <div className={cn("h-full rounded-full transition-all", scoreBg(criterion.score))} style={{ width: `${criterion.score}%` }} />
-                </div>
-                <p className="text-[11px] text-muted-foreground leading-relaxed">{criterion.reasoning}</p>
-              </div>
-            );
-          })}
-          {breakdown.formula && (
-            <p className="text-[11px] text-muted-foreground/80 italic border-t border-border/30 pt-2 mt-2">
-              {breakdown.formula}
-            </p>
-          )}
-        </div>
-      ) : (
-        <p className="text-xs text-muted-foreground">
-          {t("Chưa có bảng chi tiết cho phân tích này.", "Detailed breakdown not available for this analysis.")}
-        </p>
-      )}
-    </div>
-  );
-}
-
 function AIAnalysisSection({
   analysisResult,
   analysisMutation,
@@ -579,8 +421,8 @@ function AIAnalysisSection({
         <h3 className="font-semibold mb-1">{t("Phân tích bình luận bằng AI", "AI Review Analysis")}</h3>
         <p className="text-sm text-muted-foreground mb-4 max-w-md mx-auto">
           {t(
-            "Dùng AI để đọc bình luận người chơi, rút điểm mạnh/yếu, cảm xúc và các chủ đề chính.",
-            "Analyze player reviews with AI to uncover strengths, weaknesses, sentiment trends, and key topics.",
+            "Dùng AI để đọc bình luận người chơi và chấm theo bảng rubric (từng tiêu chí có điểm mạnh/yếu).",
+            "Use AI to read player reviews and score them with the rubric (strengths and weaknesses per criterion).",
           )}
         </p>
         <button
@@ -672,7 +514,7 @@ function AIAnalysisSection({
                 </button>
                 <div className="flex items-center gap-3 shrink-0">
                   <span className="text-muted-foreground">{h.reviewsAnalyzed} {t("bình luận", "reviews")}</span>
-                  <span className={cn("font-semibold", sentimentScoreUiLabel(h.sentimentScore, contentLang).cls)}>{h.sentimentScore}/100</span>
+                  <span className={cn("font-semibold", getScoreColor(mainAnalysisScore(h)))}>{mainAnalysisScore(h)}/100</span>
                   <button
                     onClick={(e) => { e.stopPropagation(); if (h.analyzedAt) handleDelete(h.analyzedAt); }}
                     className="p-1 rounded hover:bg-red-500/10 text-muted-foreground hover:text-red-500 transition-colors"
@@ -743,6 +585,14 @@ function AIAnalysisSection({
         <p className="text-xs text-muted-foreground mb-2">{t("Đang dịch sang tiếng Anh…", "Translating to English…")}</p>
       )}
 
+      <RedFlagSection
+        redFlagAtAGlance={view!.redFlagAtAGlance}
+        redFlagsChecklist={view!.redFlagsChecklist}
+        rubric={view!.rubric}
+      />
+
+      <RubricPanel rubric={view!.rubric} />
+
       <div className="bg-muted/30 rounded-lg p-4 mb-4">
         <AnalysisBulletBlock items={getSummaryBullets(view!)} className="list-disc space-y-1.5 pl-5 text-sm leading-relaxed text-muted-foreground" />
       </div>
@@ -755,13 +605,6 @@ function AIAnalysisSection({
           <AnalysisBulletBlock items={getRecentTrendBullets(view!)} className="list-disc space-y-1.5 pl-5 text-sm text-muted-foreground" />
         </div>
       )}
-
-      <SentimentScoreSection score={view!.sentimentScore} breakdown={view!.sentimentBreakdown} />
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-5">
-        <FeedbackSection items={view!.strengths} type="strength" />
-        <FeedbackSection items={view!.weaknesses} type="weakness" />
-      </div>
 
       <div className="mb-5">
         <h4 className="text-sm font-medium mb-3">{t("Phân bố cảm xúc bình luận", "Review Distribution")}</h4>
@@ -789,29 +632,6 @@ function AIAnalysisSection({
             return (
               <div key={label} className="text-[10px] text-muted-foreground text-center" style={{ width: `${pct}%` }}>
                 {starNum > 0 ? `${starNum}★ (${pct.toFixed(0)}%)` : label}
-              </div>
-            );
-          })}
-        </div>
-      </div>
-
-      <div>
-        <h4 className="text-sm font-medium mb-3">{t("Mức độ liên quan chủ đề", "Topic Relevance")}</h4>
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-          {Object.entries(view!.topics).map(([key, value]) => {
-            const topicColor = TOPIC_COLORS[key] ?? "bg-gray-500";
-            return (
-              <div key={key} className="space-y-1">
-                <div className="flex justify-between text-xs">
-                  <span className="text-muted-foreground">{topicKeyLabel(key, contentLang)}</span>
-                  <span className="font-medium">{value}</span>
-                </div>
-                <div className="h-2 bg-muted rounded-full overflow-hidden">
-                  <div
-                    className={cn("h-full rounded-full transition-all duration-500", topicColor)}
-                    style={{ width: `${value}%`, opacity: 0.8 }}
-                  />
-                </div>
               </div>
             );
           })}

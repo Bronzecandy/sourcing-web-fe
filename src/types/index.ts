@@ -117,10 +117,87 @@ export interface SentimentBreakdown {
   formula: string;
 }
 
+export type RubricScoreSource = "library" | "llm" | "merged";
+
+export type RedFlagSeverity = "none" | "low" | "medium" | "high";
+
+export interface RubricCriterionOutput {
+  id: string;
+  partId: string;
+  elementVi: string;
+  input: string;
+  weightInPart: number;
+  score: number | null;
+  severity?: RedFlagSeverity | null;
+  /** Red Flag: Có / Không / chưa rõ — thay cho ô điểm số */
+  flagPresent?: boolean | null;
+  reasoning?: string;
+  mentionCount?: number;
+  strengths?: string[];
+  weaknesses?: string[];
+  source: RubricScoreSource;
+  confidence?: "high" | "medium" | "low";
+  matchedLibraryKey?: string;
+}
+
+export interface RubricRedFlagBlock {
+  politics?: boolean | null;
+  casino?: boolean | null;
+  religionSensitive?: boolean | null;
+  violenceSeverity?: RedFlagSeverity | null;
+  sexualSeverity?: RedFlagSeverity | null;
+  violenceScore?: number | null;
+  sexualScore?: number | null;
+  otherTaboosNote?: string | null;
+}
+
+export interface RedFlagsChecklist {
+  politics: boolean | null;
+  religion: boolean | null;
+  casino: boolean | null;
+  violenceConcern: boolean | null;
+  sexualConcern: boolean | null;
+}
+
+export interface RedFlagAtAGlance {
+  headlineVi: string;
+  riskLevel: "clear" | "low" | "medium" | "high" | "critical";
+  blockedByHardGate: boolean;
+  hasElevatedRisk: boolean;
+  politics: boolean | null;
+  religion: boolean | null;
+  casino: boolean | null;
+  violenceSeverity: RedFlagSeverity | null;
+  sexualSeverity: RedFlagSeverity | null;
+  otherTaboosNote?: string | null;
+}
+
+export interface RubricAggregate {
+  weightedScore: number | null;
+  band5: number | null;
+  decision: "good_for_test" | "need_verification" | "drop";
+  lowScoreCriteriaCount: number;
+  redFlagHardGate: boolean;
+}
+
+export interface RubricBlock {
+  manifestVersion: number;
+  criteria: RubricCriterionOutput[];
+  aggregate: RubricAggregate;
+  redFlag: RubricRedFlagBlock;
+  dataConfidence: {
+    reviewCount: number;
+    meetsThreshold: boolean;
+    threshold: number;
+  };
+}
+
 export interface AiAnalysis {
   appId: number;
   gameName?: string;
   iconUrl?: string | null;
+  redFlagAtAGlance?: RedFlagAtAGlance;
+  redFlagsChecklist?: RedFlagsChecklist;
   source?: "database" | "external" | "csv-upload";
   summary: string;
   summaryBullets?: string[];
@@ -136,6 +213,16 @@ export interface AiAnalysis {
   dateRangeStart: string | null;
   dateRangeEnd: string | null;
   analyzedAt: string;
+  rubric?: RubricBlock;
+  /** Gợi ý bổ sung file JSON thư viện sau phân tích */
+  libraryRequests?: LibraryRequestItem[];
+}
+
+export interface LibraryRequestItem {
+  kind: string;
+  label: string;
+  messageVi: string;
+  jsonSuggestion: Record<string, unknown>;
 }
 
 export interface DashboardStats {
@@ -213,4 +300,17 @@ export interface GamePotentialDetail {
 export interface ApiResponse<T> {
   success: boolean;
   data: T;
+}
+
+/** Hàng chờ bổ sung thư viện (từ phân tích AI / thủ công) */
+export interface LibraryPendingItem {
+  id: string;
+  type: string;
+  label: string;
+  detailVi: string;
+  jsonSuggestion: Record<string, unknown>;
+  appId: number;
+  gameName: string;
+  createdAt: string;
+  status: "pending" | "merged";
 }

@@ -1,6 +1,12 @@
 import { translateTextsViToEn } from "@/services/api";
 import type { AiAnalysis, SentimentBreakdown } from "@/types";
 
+/** Primary score: weighted rubric when present; falls back to legacy sentimentScore. */
+export function mainAnalysisScore(a: Pick<AiAnalysis, "rubric" | "sentimentScore">): number {
+  const w = a.rubric?.aggregate?.weightedScore;
+  return typeof w === "number" ? w : a.sentimentScore;
+}
+
 export function getSummaryBullets(a: Pick<AiAnalysis, "summaryBullets" | "summary">): string[] {
   if (a.summaryBullets?.length) return [...a.summaryBullets];
   const s = (a.summary ?? "").trim();
@@ -30,12 +36,30 @@ export function getRecentTrendBullets(a: Pick<AiAnalysis, "recentTrendBullets" |
 export async function localizeAnalysisToEn(a: AiAnalysis): Promise<AiAnalysis> {
   const summaryBullets = getSummaryBullets(a);
   const trendBullets = getRecentTrendBullets(a);
-  const flat: string[] = [
-    ...summaryBullets,
-    ...trendBullets,
-    ...a.strengths.map((x) => x.point),
-    ...a.weaknesses.map((x) => x.point),
-  ];
+
+  const rubricTexts: string[] = [];
+  const rubricCritIdx: Array<{ i: number; field: "reasoning"; j?: number } | { i: number; field: "strengths"; j: number } | { i: number; field: "weaknesses"; j: number }> = [];
+  if (a.rubric?.criteria?.length) {
+    for (let i = 0; i < a.rubric.criteria.length; i++) {
+      const c = a.rubric.criteria[i]!;
+      const sts = c.strengths ?? [];
+      for (let j = 0; j < sts.length; j++) {
+        rubricTexts.push(sts[j]!);
+        rubricCritIdx.push({ i, field: "strengths", j });
+      }
+      const wks = c.weaknesses ?? [];
+      for (let j = 0; j < wks.length; j++) {
+        rubricTexts.push(wks[j]!);
+        rubricCritIdx.push({ i, field: "weaknesses", j });
+      }
+      if (c.reasoning?.trim()) {
+        rubricTexts.push(c.reasoning);
+        rubricCritIdx.push({ i, field: "reasoning" });
+      }
+    }
+  }
+
+  const flat: string[] = [...summaryBullets, ...trendBullets];
 
   const bd = a.sentimentBreakdown;
   if (bd) {
@@ -48,12 +72,12 @@ export async function localizeAnalysisToEn(a: AiAnalysis): Promise<AiAnalysis> {
     );
   }
 
+  flat.push(...rubricTexts);
+
   const tr = await translateTextsViToEn(flat);
   let k = 0;
   const nextSummary = summaryBullets.map(() => tr[k++] ?? "");
   const nextTrend = trendBullets.map(() => tr[k++] ?? "");
-  const nextStrengths = a.strengths.map((it) => ({ ...it, point: tr[k++] ?? it.point }));
-  const nextWeaknesses = a.weaknesses.map((it) => ({ ...it, point: tr[k++] ?? it.point }));
 
   let sentimentBreakdown: SentimentBreakdown | undefined;
   if (bd) {
@@ -66,14 +90,41 @@ export async function localizeAnalysisToEn(a: AiAnalysis): Promise<AiAnalysis> {
     };
   }
 
+  const rubricTr = tr.slice(k);
+  let rk = 0;
+  const nextCriteria =
+    a.rubric?.criteria?.map((c) => ({ ...c })) ?? [];
+
+  for (const ref of rubricCritIdx) {
+    const text = rubricTr[rk++] ?? "";
+    const crit = nextCriteria[ref.i];
+    if (!crit) continue;
+    if (ref.field === "reasoning") crit.reasoning = text;
+    else if (ref.field === "strengths") {
+      const arr = [...(crit.strengths ?? [])];
+      arr[ref.j] = text;
+      crit.strengths = arr;
+    } else {
+      const arr = [...(crit.weaknesses ?? [])];
+      arr[ref.j] = text;
+      crit.weaknesses = arr;
+    }
+  }
+
+  const nextRubric =
+    a.rubric && nextCriteria.length === a.rubric.criteria.length
+      ? { ...a.rubric, criteria: nextCriteria }
+      : a.rubric;
+
   return {
     ...a,
     summaryBullets: nextSummary,
     summary: nextSummary.join("\n"),
     recentTrendBullets: nextTrend.length ? nextTrend : undefined,
     recentTrend: nextTrend.join("\n"),
-    strengths: nextStrengths,
-    weaknesses: nextWeaknesses,
+    strengths: [],
+    weaknesses: [],
     sentimentBreakdown,
+    rubric: nextRubric,
   };
 }
