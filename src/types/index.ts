@@ -172,16 +172,38 @@ export interface RedFlagAtAGlance {
   otherTaboosNote?: string | null;
 }
 
+export interface RubricPartRollup {
+  partId: string;
+  labelVi: string;
+  weightInTotal: number;
+  manifestWeightInTotal?: number;
+  partAverageScore: number | null;
+  scoredWeightSumInPart: number;
+  includedInGlobalScore: boolean;
+  numeratorContribution: number | null;
+}
+
+/** Quyết định thử nghiệm từ điểm có trọng số 0–100 và red flag cứng. */
+export type RubricTestDecision =
+  | "must_test"
+  | "suitable_test"
+  | "consider_test"
+  | "no_test"
+  | "blocked_red_flag";
+
 export interface RubricAggregate {
   weightedScore: number | null;
   band5: number | null;
-  decision: "good_for_test" | "need_verification" | "drop";
+  decision: RubricTestDecision;
   lowScoreCriteriaCount: number;
   redFlagHardGate: boolean;
+  partRollups?: RubricPartRollup[];
+  globalWeightDenominator?: number;
 }
 
 export interface RubricBlock {
   manifestVersion: number;
+  genrePackResolved?: string | null;
   criteria: RubricCriterionOutput[];
   aggregate: RubricAggregate;
   redFlag: RubricRedFlagBlock;
