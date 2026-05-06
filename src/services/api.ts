@@ -168,10 +168,17 @@ export async function triggerAnalysis(appId: number): Promise<AiAnalysis> {
   return data.data;
 }
 
-export async function triggerExternalAnalysis(input: string): Promise<AiAnalysis> {
-  const { data } = await api.post<ApiResponse<AiAnalysis>>("/analysis/analyze-external", { input }, {
-    timeout: 600_000,
-  });
+export async function triggerExternalAnalysis(
+  input: string,
+  platform: "taptap" | "steam" = "taptap",
+): Promise<AiAnalysis> {
+  const { data } = await api.post<ApiResponse<AiAnalysis>>(
+    "/analysis/analyze-external",
+    { input, platform },
+    {
+      timeout: 600_000,
+    },
+  );
   return data.data;
 }
 

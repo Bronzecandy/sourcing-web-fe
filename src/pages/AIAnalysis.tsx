@@ -24,6 +24,7 @@ const BUCKET_COLORS: Record<string, string> = {
 
 export default function AIAnalysisPage() {
   const [input, setInput] = useState("");
+  const [externalPlatform, setExternalPlatform] = useState<"taptap" | "steam">("taptap");
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [selected, setSelected] = useState<AiAnalysis | null>(null);
@@ -47,7 +48,8 @@ export default function AIAnalysisPage() {
   });
 
   const analyzeMutation = useMutation({
-    mutationFn: (val: string) => triggerExternalAnalysis(val),
+    mutationFn: (args: { input: string; platform: "taptap" | "steam" }) =>
+      triggerExternalAnalysis(args.input, args.platform),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["all-analyses"] });
       setSelected(data);
@@ -66,7 +68,7 @@ export default function AIAnalysisPage() {
   const handleSubmit = () => {
     const trimmed = input.trim();
     if (!trimmed) return;
-    analyzeMutation.mutate(trimmed);
+    analyzeMutation.mutate({ input: trimmed, platform: externalPlatform });
   };
 
   const handleCsvSubmit = () => {
@@ -103,8 +105,8 @@ export default function AIAnalysisPage() {
         </h1>
         <p className="text-muted-foreground text-sm mt-1">
           {t(
-            "Phân tích bình luận game TapTap bất kỳ — nhập URL hoặc App ID để lấy bình luận trực tiếp từ TapTap.",
-            "Analyze reviews of any TapTap game — enter a URL or App ID to fetch reviews directly from TapTap.",
+            "Chọn nguồn TapTap hoặc Steam, rồi nhập URL hoặc App ID để tải bình luận và phân tích.",
+            "Choose TapTap or Steam, then enter a URL or App ID to fetch reviews and analyze.",
           )}
         </p>
       </div>
@@ -114,15 +116,35 @@ export default function AIAnalysisPage() {
         <h2 className="font-semibold flex items-center gap-2 mb-4">
           <Sparkles className="w-5 h-5 text-purple-500" /> {t("Phân tích một game", "Analyze Any Game")}
         </h2>
+        <div className="flex flex-wrap items-center gap-3 mb-3">
+          <span className="text-xs font-medium text-muted-foreground whitespace-nowrap">
+            {t("Nguồn:", "Source:")}
+          </span>
+          <select
+            value={externalPlatform}
+            onChange={(e) => setExternalPlatform(e.target.value as "taptap" | "steam")}
+            className="text-sm rounded-lg border border-border bg-background px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/50"
+          >
+            <option value="taptap">TapTap</option>
+            <option value="steam">Steam</option>
+          </select>
+        </div>
         <div className="flex gap-3">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <input
               type="text"
-              placeholder={t(
-                "Nhập URL TapTap hoặc App ID (vd: https://www.taptap.cn/app/209601 hoặc 209601)",
-                "Enter TapTap URL or App ID (e.g. https://www.taptap.cn/app/209601 or 209601)",
-              )}
+              placeholder={
+                externalPlatform === "steam"
+                  ? t(
+                      "URL Steam hoặc App ID (vd: https://store.steampowered.com/app/3242950/ hoặc 3242950)",
+                      "Steam URL or App ID (e.g. https://store.steampowered.com/app/3242950/ or 3242950)",
+                    )
+                  : t(
+                      "Nhập URL TapTap hoặc App ID (vd: https://www.taptap.cn/app/209601 hoặc 209601)",
+                      "Enter TapTap URL or App ID (e.g. https://www.taptap.cn/app/209601 or 209601)",
+                    )
+              }
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") handleSubmit(); }}
@@ -153,10 +175,15 @@ export default function AIAnalysisPage() {
         )}
         <p className="text-xs text-muted-foreground mt-3 flex items-center gap-1">
           <ExternalLink className="w-3 h-3" />
-          {t(
-            "Bình luận được lấy trực tiếp từ API TapTap — có thể mất 1–2 phút tùy số lượng bình luận.",
-            "Reviews are fetched live from TapTap's API — this may take 1-2 minutes depending on the number of reviews.",
-          )}
+          {externalPlatform === "steam"
+            ? t(
+                "Tối đa ~10.000 bình luận gần đây từ Steam Store — có thể vài phút tùy lượng.",
+                "Up to ~10,000 recent reviews from Steam Store — may take several minutes.",
+              )
+            : t(
+                "Bình luận được lấy trực tiếp từ API TapTap — có thể mất 1–2 phút tùy số lượng bình luận.",
+                "Reviews are fetched live from TapTap's API — this may take 1-2 minutes depending on the number of reviews.",
+              )}
         </p>
 
         {/* Divider */}
@@ -303,9 +330,9 @@ export default function AIAnalysisPage() {
                             {t("Ngoài TapTap", "External")}
                           </span>
                         )}
-                        {a.source === "csv-upload" && (
-                          <span className="text-[10px] bg-blue-500/10 text-blue-600 px-1.5 py-0.5 rounded">
-                            {t("Tải CSV", "CSV Upload")}
+                        {a.source === "steam" && (
+                          <span className="text-[10px] bg-sky-500/10 text-sky-700 dark:text-sky-400 px-1.5 py-0.5 rounded">
+                            Steam
                           </span>
                         )}
                       </div>

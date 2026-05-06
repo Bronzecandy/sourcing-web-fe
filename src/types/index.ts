@@ -220,7 +220,7 @@ export interface AiAnalysis {
   iconUrl?: string | null;
   redFlagAtAGlance?: RedFlagAtAGlance;
   redFlagsChecklist?: RedFlagsChecklist;
-  source?: "database" | "external" | "csv-upload";
+  source?: "database" | "external" | "csv-upload" | "steam";
   summary: string;
   summaryBullets?: string[];
   strengths: AIFeedbackItem[];
