@@ -20,6 +20,8 @@ export interface GameDetail {
   bannerUrl: string | null;
   description: string | null;
   developerNote: string | null;
+  developerName?: string | null;
+  publisherName?: string | null;
   tags: string[];
   rating: string | null;
   latestScore: string | null;
@@ -235,6 +237,12 @@ export interface AiAnalysis {
   dateRangeStart: string | null;
   dateRangeEnd: string | null;
   analyzedAt: string;
+  reviewWindowMode?: "all" | "days" | "range";
+  reviewWindowDays?: 7 | 14 | 30 | 60;
+  reviewFilterFrom?: string;
+  reviewFilterTo?: string;
+  developerName?: string | null;
+  publisherName?: string | null;
   rubric?: RubricBlock;
   /** Gợi ý bổ sung file JSON thư viện sau phân tích */
   libraryRequests?: LibraryRequestItem[];

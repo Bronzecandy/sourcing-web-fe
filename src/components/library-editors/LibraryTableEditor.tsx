@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useUiCopy } from "@/lib/use-ui-copy";
@@ -793,13 +793,16 @@ function PendingFileEditor({ value }: { value: PendingFileJson }) {
 export function formatPendingSuggestion(p: LibraryPendingItem, tierMap: Record<string, number>): string {
   const j = p.jsonSuggestion ?? {};
   if (p.type === "game_size" && typeof j.maxMb === "number") {
-    return `≤${j.maxMb} MB (add score to merge)`;
+    const scorePart = typeof j.score === "number" ? ` · ${j.score}` : "";
+    return `≤${j.maxMb} MB${scorePart}`;
   }
   if (p.type === "update_signal" && typeof j.maxDaysSinceUpdate === "number") {
-    return `≤${j.maxDaysSinceUpdate}d (add score to merge)`;
+    const scorePart = typeof j.score === "number" ? ` · ${j.score}` : "";
+    return `≤${j.maxDaysSinceUpdate}d${scorePart}`;
   }
   if (p.type === "community_signal" && typeof j.minFans === "number") {
-    return `minFans ${j.minFans} (add score to merge)`;
+    const scorePart = typeof j.score === "number" ? ` · ${j.score}` : "";
+    return `minFans ${j.minFans}${scorePart}`;
   }
   if (p.type === "studio" && typeof j.score === "number") {
     return `${j.score}${typeof j.tier === "string" ? ` · tier ${j.tier}` : ""}`;
@@ -911,6 +914,21 @@ export function PendingMergeTable({
   const setTier = useCallback((id: string, v: string) => {
     setTierById((m) => ({ ...m, [id]: v }));
   }, []);
+
+  useEffect(() => {
+    setScoreById((prev) => {
+      const next = { ...prev };
+      let changed = false;
+      for (const p of pending) {
+        const j = p.jsonSuggestion ?? {};
+        if (typeof j.score === "number" && !(p.id in next)) {
+          next[p.id] = String(j.score);
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+  }, [pending]);
 
   if (pending.length === 0) {
     return <p className="text-sm text-muted-foreground">{t("Không có pending.", "No pending items.")}</p>;

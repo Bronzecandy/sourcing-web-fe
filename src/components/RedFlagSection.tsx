@@ -1,6 +1,7 @@
 import { AlertTriangle } from "lucide-react";
 import type { AiAnalysis, RubricBlock } from "@/types";
 import { useUiCopy } from "@/lib/use-ui-copy";
+import { hasActiveRedFlags } from "@/lib/red-flag-utils";
 import { cn } from "@/lib/utils";
 
 function yn(v: boolean | null | undefined, t: (vi: string, en: string) => string) {
@@ -47,7 +48,7 @@ export default function RedFlagSection({
   const checklist = checklistProp ?? checklistFromRubric(rubric);
   const glance = redFlagAtAGlance;
 
-  if (!rubric && !glance) return null;
+  if (!hasActiveRedFlags(glance, checklist, rubric)) return null;
 
   return (
     <div
@@ -66,7 +67,7 @@ export default function RedFlagSection({
           )}
         />
         <div className="space-y-1 min-w-0">
-          <h3 className="text-sm font-semibold">{t("Red Flag (ưu tiên)", "Red Flag (priority)")}</h3>
+          <h3 className="text-sm font-semibold">{t("Cảnh báo nội dung", "Content warnings")}</h3>
           {glance?.headlineVi ? (
             <p className="text-xs text-muted-foreground leading-relaxed">{glance.headlineVi}</p>
           ) : !checklist ? null : (

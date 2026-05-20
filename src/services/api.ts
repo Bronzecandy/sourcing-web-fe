@@ -12,6 +12,8 @@ import type {
   ApiResponse,
   LibraryPendingItem,
 } from "../types";
+import type { ReviewWindow } from "@/types/review-window";
+import type { HistoryRange } from "@/types/history-range";
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || "/api",
@@ -61,12 +63,19 @@ export type ContentLangParam = "vi" | "en";
 
 export async function fetchGameDetail(
   appId: number,
-  days?: number,
+  range: HistoryRange | number = 30,
   contentLang: ContentLangParam = "vi",
 ): Promise<GameDetail> {
-  const { data } = await api.get<ApiResponse<GameDetail>>(`/games/${appId}`, {
-    params: { days, contentLang },
-  });
+  const params: Record<string, string | number> = { contentLang };
+  if (typeof range === "number") {
+    params.days = range;
+  } else if (range.kind === "days") {
+    params.days = range.days;
+  } else {
+    params.from = range.from;
+    params.to = range.to;
+  }
+  const { data } = await api.get<ApiResponse<GameDetail>>(`/games/${appId}`, { params });
   return data.data;
 }
 
@@ -161,30 +170,38 @@ export async function deleteAnalysis(appId: number, analyzedAt?: string): Promis
   await api.delete(`/analysis/${appId}`, { params: analyzedAt ? { analyzedAt } : undefined });
 }
 
-export async function triggerAnalysis(appId: number): Promise<AiAnalysis> {
-  const { data } = await api.post<ApiResponse<AiAnalysis>>(`/analysis/analyze/${appId}`, null, {
-    timeout: 300_000,
-  });
+export async function triggerAnalysis(
+  appId: number,
+  reviewWindow?: ReviewWindow,
+): Promise<AiAnalysis> {
+  const { data } = await api.post<ApiResponse<AiAnalysis>>(
+    `/analysis/analyze/${appId}`,
+    { reviewWindow: reviewWindow ?? { mode: "all" } },
+    { timeout: 300_000 },
+  );
   return data.data;
 }
 
 export async function triggerExternalAnalysis(
   input: string,
   platform: "taptap" | "steam" = "taptap",
+  reviewWindow?: ReviewWindow,
 ): Promise<AiAnalysis> {
   const { data } = await api.post<ApiResponse<AiAnalysis>>(
     "/analysis/analyze-external",
-    { input, platform },
-    {
-      timeout: 600_000,
-    },
+    { input, platform, reviewWindow: reviewWindow ?? { mode: "all" } },
+    { timeout: 600_000 },
   );
   return data.data;
 }
 
-export async function triggerCsvAnalysis(file: File): Promise<AiAnalysis> {
+export async function triggerCsvAnalysis(
+  file: File,
+  reviewWindow?: ReviewWindow,
+): Promise<AiAnalysis> {
   const formData = new FormData();
   formData.append("file", file);
+  formData.append("reviewWindow", JSON.stringify(reviewWindow ?? { mode: "all" }));
   const { data } = await api.post<ApiResponse<AiAnalysis>>("/analysis/analyze-csv", formData, {
     timeout: 600_000,
     headers: { "Content-Type": "multipart/form-data" },

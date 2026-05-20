@@ -5,28 +5,20 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
 } from "recharts";
-import { ArrowLeft, Brain, Star, Users, Heart, MessageSquare, TrendingUp, Activity, Shield, Database, History, ChevronDown, ChevronUp, Trash2, Plus, Sparkles } from "lucide-react";
+import { ArrowLeft, Brain, Star, Users, Heart, MessageSquare, TrendingUp, Activity, Shield, Database, History, ChevronDown, ChevronUp, Trash2, Sparkles } from "lucide-react";
 import { fetchGameDetail, fetchGameReviews, triggerAnalysis, fetchGamePotentialDetail, fetchLatestAnalysis, fetchAnalysisHistory, deleteAnalysis } from "@/services/api";
 import { useContentLang } from "@/lib/content-language";
-import { localizeAnalysisToEn, getSummaryBullets, getRecentTrendBullets, mainAnalysisScore } from "@/lib/analysis-localize";
-import { AnalysisBulletBlock } from "@/components/AnalysisBulletBlock";
-import RubricPanel from "@/components/RubricPanel";
-import RedFlagSection from "@/components/RedFlagSection";
-import {
-  useUiCopy,
-  potentialRadarMetric,
-  bucketDisplayName,
-} from "@/lib/use-ui-copy";
+import { localizeAnalysisToEn, getSummaryBullets, mainAnalysisScore } from "@/lib/analysis-localize";
+import ReviewWindowPicker from "@/components/ReviewWindowPicker";
+import HistoryRangePicker from "@/components/HistoryRangePicker";
+import type { HistoryRange } from "@/types/history-range";
+import AnalysisDetailModal from "@/components/AnalysisDetailModal";
+import AnalysisSourceBadge from "@/components/AnalysisSourceBadge";
+import { DEFAULT_REVIEW_WINDOW, type ReviewWindow } from "@/types/review-window";
+import { buildFanReserveDeltaSeries, formatDelta } from "@/lib/chart-delta";
+import { useUiCopy, potentialRadarMetric } from "@/lib/use-ui-copy";
 import { cn, formatNumber, getScoreColor } from "@/lib/utils";
 import type { AiAnalysis, GameReview, GamePotentialDetail } from "@/types";
-
-const BUCKET_COLORS: Record<string, string> = {
-  "Very Negative": "bg-red-500",
-  "Negative": "bg-orange-500",
-  "Mixed": "bg-amber-500",
-  "Positive": "bg-green-500",
-  "Very Positive": "bg-emerald-500",
-};
 
 const STAR_COLORS: Record<string, string> = {
   "1": "bg-red-500",
@@ -41,13 +33,13 @@ export default function GameDetail() {
   const navigate = useNavigate();
   const { lang: contentLang } = useContentLang();
   const { t } = useUiCopy();
-  const [days, setDays] = useState(30);
+  const [historyRange, setHistoryRange] = useState<HistoryRange>({ kind: "days", days: 30 });
   const [reviewPage, setReviewPage] = useState(1);
   const appId = parseInt(id || "0");
 
   const { data: game, isLoading } = useQuery({
-    queryKey: ["game", appId, days, contentLang],
-    queryFn: () => fetchGameDetail(appId, days, contentLang),
+    queryKey: ["game", appId, historyRange, contentLang],
+    queryFn: () => fetchGameDetail(appId, historyRange, contentLang),
     enabled: appId > 0,
   });
 
@@ -78,8 +70,10 @@ export default function GameDetail() {
     enabled: appId > 0,
   });
 
+  const [reviewWindow, setReviewWindow] = useState<ReviewWindow>(DEFAULT_REVIEW_WINDOW);
+
   const analysisMutation = useMutation({
-    mutationFn: () => triggerAnalysis(appId),
+    mutationFn: () => triggerAnalysis(appId, reviewWindow),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ai-analysis", appId] });
       queryClient.invalidateQueries({ queryKey: ["ai-analysis-history", appId] });
@@ -125,6 +119,12 @@ export default function GameDetail() {
     rating: h.rating != null ? parseFloat(h.rating) : null,
   }));
 
+  const fanDeltaChartData = buildFanReserveDeltaSeries(game.history).map((h) => ({
+    date: new Date(h.date).toLocaleDateString("en", { month: "short", day: "numeric" }),
+    fansDelta: h.fansDelta,
+    reservesDelta: h.reservesDelta,
+  }));
+
   return (
     <div className="space-y-6">
       <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
@@ -143,6 +143,15 @@ export default function GameDetail() {
           )}
           <div className="flex-1">
             <h1 className="text-2xl font-bold">{game.title}</h1>
+            {game.developerName && (
+              <p className="text-sm text-muted-foreground mt-1">
+                <span className="font-medium text-foreground">{t("Nhà phát triển:", "Developer:")}</span>{" "}
+                {game.developerName}
+                {game.publisherName && game.publisherName !== game.developerName && (
+                  <span> · {t("Phát hành:", "Publisher:")} {game.publisherName}</span>
+                )}
+              </p>
+            )}
             <div className="flex flex-wrap gap-2 mt-2">
               {game.tags.map((tag) => (
                 <span key={tag} className="px-2 py-0.5 rounded-full bg-accent text-accent-foreground text-xs font-medium">{tag}</span>
@@ -195,22 +204,15 @@ export default function GameDetail() {
         analysisResult={analysisResult}
         analysisMutation={analysisMutation}
         history={analysisHistory ?? []}
+        reviewWindow={reviewWindow}
+        onReviewWindowChange={setReviewWindow}
       />
 
       {/* Charts */}
       <div className="bg-card rounded-xl border border-border p-5">
-        <div className="flex items-center justify-between mb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
           <h2 className="text-lg font-semibold">{t("Lịch sử xếp hạng", "Rank History")}</h2>
-          <div className="flex gap-2">
-            {[7, 14, 30, 60].map((d) => (
-              <button key={d} onClick={() => setDays(d)}
-                className={cn("px-3 py-1 rounded-lg text-xs font-medium transition-colors",
-                  days === d ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"
-                )}>
-                {contentLang === "vi" ? `${d} ngày` : `${d}d`}
-              </button>
-            ))}
-          </div>
+          <HistoryRangePicker value={historyRange} onChange={setHistoryRange} />
         </div>
         <ResponsiveContainer width="100%" height={300}>
           <LineChart data={chartData}>
@@ -226,16 +228,19 @@ export default function GameDetail() {
       </div>
 
       <div className="bg-card rounded-xl border border-border p-5">
-        <h2 className="text-lg font-semibold mb-4">{t("Lịch sử fan & đăng ký trước", "Fans & Reserves History")}</h2>
+        <h2 className="text-lg font-semibold mb-1">{t("Tăng fan & đăng ký trước theo ngày", "Daily fan & reserve growth")}</h2>
+        <p className="text-xs text-muted-foreground mb-4">
+          {t("So với ngày liền trước trong khoảng đã chọn.", "Change vs. the previous day in the selected range.")}
+        </p>
         <ResponsiveContainer width="100%" height={280}>
-          <LineChart data={reserveChartData}>
+          <LineChart data={fanDeltaChartData}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
             <XAxis dataKey="date" tick={{ fontSize: 11 }} />
-            <YAxis tick={{ fontSize: 11 }} tickFormatter={shortNum} />
-            <Tooltip formatter={(value) => formatNumber(Number(value))} />
+            <YAxis tick={{ fontSize: 11 }} tickFormatter={(v) => formatDelta(Number(v))} />
+            <Tooltip formatter={(value) => (value != null ? formatDelta(Number(value)) : "—")} />
             <Legend />
-            <Line type="monotone" dataKey="fans" name={t("Người hâm mộ", "Fans")} stroke="#6366f1" strokeWidth={2} dot={{ r: 2 }} activeDot={{ r: 5 }} />
-            <Line type="monotone" dataKey="reserves" name={t("Đăng ký trước", "Reserves")} stroke="#8b5cf6" strokeWidth={2} dot={{ r: 2 }} activeDot={{ r: 5 }} />
+            <Line type="monotone" dataKey="fansDelta" name={t("Tăng fan/ngày", "Fans/day")} stroke="#6366f1" strokeWidth={2} dot={{ r: 2 }} connectNulls={false} />
+            <Line type="monotone" dataKey="reservesDelta" name={t("Tăng đăng ký/ngày", "Reserves/day")} stroke="#8b5cf6" strokeWidth={2} dot={{ r: 2 }} connectNulls={false} />
           </LineChart>
         </ResponsiveContainer>
       </div>
@@ -368,28 +373,33 @@ function AIAnalysisSection({
   analysisResult,
   analysisMutation,
   history,
+  reviewWindow,
+  onReviewWindowChange,
 }: {
   analysisResult: AiAnalysis | undefined;
   analysisMutation: { mutate: () => void; isPending: boolean; isError: boolean; error: Error | null };
   history: AiAnalysis[];
+  reviewWindow: ReviewWindow;
+  onReviewWindowChange: (w: ReviewWindow) => void;
 }) {
   const [showHistory, setShowHistory] = useState(false);
-  const [viewingIdx, setViewingIdx] = useState<number | null>(null);
+  const [modalAnalysis, setModalAnalysis] = useState<AiAnalysis | null>(null);
   const queryClient = useQueryClient();
   const { lang: contentLang } = useContentLang();
   const { t } = useUiCopy();
   const appId = analysisResult?.appId ?? history[0]?.appId ?? 0;
 
-  const displayed = viewingIdx != null && history[viewingIdx] ? history[viewingIdx] : analysisResult;
+  const overview = analysisResult;
 
-  const { data: localized, isPending: localizing } = useQuery({
-    queryKey: ["ai-analysis-localized", displayed?.appId, displayed?.analyzedAt, contentLang],
-    queryFn: () => localizeAnalysisToEn(displayed!),
-    enabled: !!displayed && contentLang === "en",
+  const { data: modalLocalized } = useQuery({
+    queryKey: ["ai-analysis-localized", modalAnalysis?.appId, modalAnalysis?.analyzedAt, contentLang],
+    queryFn: () => localizeAnalysisToEn(modalAnalysis!),
+    enabled: !!modalAnalysis && contentLang === "en",
     staleTime: 86_400_000,
   });
 
-  const view = contentLang === "en" ? (localized ?? displayed) : displayed;
+  const modalView =
+    modalAnalysis && contentLang === "en" ? (modalLocalized ?? modalAnalysis) : modalAnalysis;
 
   const handleDelete = async (analyzedAt: string) => {
     if (!confirm(t("Xóa phân tích này?", "Delete this analysis?"))) return;
@@ -397,7 +407,7 @@ function AIAnalysisSection({
       await deleteAnalysis(appId, analyzedAt);
       queryClient.invalidateQueries({ queryKey: ["ai-analysis", appId] });
       queryClient.invalidateQueries({ queryKey: ["ai-analysis-history", appId] });
-      if (viewingIdx != null) setViewingIdx(null);
+      if (modalAnalysis?.analyzedAt === analyzedAt) setModalAnalysis(null);
     } catch { /* ignore */ }
   };
 
@@ -407,237 +417,165 @@ function AIAnalysisSection({
       await deleteAnalysis(appId);
       queryClient.invalidateQueries({ queryKey: ["ai-analysis", appId] });
       queryClient.invalidateQueries({ queryKey: ["ai-analysis-history", appId] });
-      setViewingIdx(null);
+      setModalAnalysis(null);
       setShowHistory(false);
     } catch { /* ignore */ }
   };
 
-  if (!displayed && history.length === 0) {
+  const runBlock = (
+    <div className="mb-4 text-left max-w-lg mx-auto">
+      <ReviewWindowPicker value={reviewWindow} onChange={onReviewWindowChange} className="mb-4" />
+      <button
+        onClick={() => analysisMutation.mutate()}
+        disabled={analysisMutation.isPending}
+        className="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg text-sm font-medium hover:from-purple-700 hover:to-blue-700 disabled:opacity-50 transition-all shadow-md"
+      >
+        {analysisMutation.isPending ? (
+          <span className="flex items-center gap-2 justify-center">
+            <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+            {t("Đang phân tích bình luận…", "Analyzing reviews...")}
+          </span>
+        ) : (
+          <span className="flex items-center gap-2 justify-center">
+            <Sparkles className="w-4 h-4" /> {t("Chạy phân tích AI", "Run AI Analysis")}
+          </span>
+        )}
+      </button>
+      {analysisMutation.isError && (
+        <p className="text-destructive text-xs mt-3 text-center">
+          {t("Lỗi:", "Error:")} {(analysisMutation.error as Error)?.message ?? t("Phân tích thất bại", "Analysis failed")}
+        </p>
+      )}
+    </div>
+  );
+
+  if (!overview && history.length === 0) {
     return (
       <div className="bg-card rounded-xl border border-border p-6 text-center">
         <div className="w-14 h-14 rounded-2xl bg-gradient-to-br from-purple-500/20 to-blue-500/20 flex items-center justify-center mx-auto mb-4">
           <Sparkles className="w-7 h-7 text-purple-500" />
         </div>
         <h3 className="font-semibold mb-1">{t("Phân tích bình luận bằng AI", "AI Review Analysis")}</h3>
-        <p className="text-sm text-muted-foreground mb-4 max-w-md mx-auto">
+        <p className="text-sm text-muted-foreground mb-2 max-w-md mx-auto">
           {t(
-            "Dùng AI để đọc bình luận người chơi và chấm theo bảng rubric (từng tiêu chí có điểm mạnh/yếu).",
-            "Use AI to read player reviews and score them with the rubric (strengths and weaknesses per criterion).",
+            "Chọn khoảng bình luận, rồi chạy AI để chấm điểm và tóm tắt.",
+            "Pick a review window, then run AI scoring and summary.",
           )}
         </p>
-        <button
-          onClick={() => analysisMutation.mutate()}
-          disabled={analysisMutation.isPending}
-          className="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg text-sm font-medium hover:from-purple-700 hover:to-blue-700 disabled:opacity-50 transition-all shadow-md"
-        >
-          {analysisMutation.isPending ? (
-            <span className="flex items-center gap-2">
-              <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
-              {t("Đang phân tích bình luận…", "Analyzing reviews...")}
-            </span>
-          ) : (
-            <span className="flex items-center gap-2">
-              <Sparkles className="w-4 h-4" /> {t("Chạy phân tích AI", "Run AI Analysis")}
-            </span>
-          )}
-        </button>
-        {analysisMutation.isError && (
-          <p className="text-destructive text-xs mt-3">
-            {t("Lỗi:", "Error:")} {(analysisMutation.error as Error)?.message ?? t("Phân tích thất bại", "Analysis failed")}
-          </p>
-        )}
+        {runBlock}
       </div>
     );
   }
 
-  if (!displayed) return null;
-
-  const buckets = view!.bucketCounts ?? {};
-  const totalReviews = view!.reviewsAnalyzed ?? 0;
-
   return (
-    <div className="bg-card rounded-xl border border-border p-5">
-      <div className="flex items-center justify-between mb-4">
-        <h2 className="text-lg font-semibold flex items-center gap-2">
-          <Brain className="w-5 h-5" /> {t("Phân tích bình luận bằng AI", "AI Review Analysis")}
-        </h2>
-        <div className="flex items-center gap-2">
-          {history.length > 0 && (
-            <button
-              onClick={() => { setShowHistory(!showHistory); }}
-              className="px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-muted transition-colors flex items-center gap-1.5"
-            >
-              <History className="w-3.5 h-3.5" /> {t("Lịch sử", "History")} ({history.length})
-              {showHistory ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-            </button>
-          )}
-          <button
-            onClick={() => { analysisMutation.mutate(); setViewingIdx(null); }}
-            disabled={analysisMutation.isPending}
-            className="px-4 py-1.5 text-xs rounded-lg bg-gradient-to-r from-purple-600 to-blue-600 text-white font-medium hover:from-purple-700 hover:to-blue-700 disabled:opacity-50 transition-all flex items-center gap-1.5 shadow-sm"
-          >
-            {analysisMutation.isPending ? (
-              <>
-                <span className="animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-white" />
-                {t("Đang phân tích…", "Analyzing...")}
-              </>
-            ) : (
-              <>
-                <Plus className="w-3.5 h-3.5" /> {t("Phân tích mới", "New Analysis")}
-              </>
-            )}
-          </button>
-        </div>
-      </div>
-
-      {showHistory && history.length > 0 && (
-        <div className="mb-4 border border-border/50 rounded-lg overflow-hidden">
-          <div className="max-h-48 overflow-y-auto divide-y divide-border/50">
-            {history.map((h, idx) => (
-              <div
-                key={idx}
-                className={cn(
-                  "flex items-center justify-between px-3 py-2.5 text-xs hover:bg-muted/50 transition-colors",
-                  viewingIdx === idx && "bg-accent/30"
-                )}
+    <>
+      <div className="bg-card rounded-xl border border-border p-5">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+          <h2 className="text-lg font-semibold flex items-center gap-2">
+            <Brain className="w-5 h-5" /> {t("Phân tích bình luận bằng AI", "AI Review Analysis")}
+          </h2>
+          <div className="flex items-center gap-2 flex-wrap">
+            {history.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setShowHistory(!showHistory)}
+                className="px-3 py-1.5 text-xs rounded-lg border border-border hover:bg-muted transition-colors flex items-center gap-1.5"
               >
-                <button
-                  onClick={() => { setViewingIdx(idx); setShowHistory(false); }}
-                  className="flex-1 text-left"
-                >
-                  <span className="font-medium">
-                    {h.analyzedAt ? new Date(h.analyzedAt).toLocaleString() : `Analysis #${history.length - idx}`}
+                <History className="w-3.5 h-3.5" /> {t("Lịch sử", "History")} ({history.length})
+                {showHistory ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+              </button>
+            )}
+          </div>
+        </div>
+
+        {runBlock}
+
+        {showHistory && history.length > 0 && (
+          <div className="mb-4 border border-border/50 rounded-lg overflow-hidden">
+            <div className="max-h-48 overflow-y-auto divide-y divide-border/50">
+              {history.map((h, idx) => (
+                <div key={idx} className="flex items-center justify-between px-3 py-2.5 text-xs hover:bg-muted/50 gap-2">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="font-medium truncate tabular-nums">
+                        {h.analyzedAt ? new Date(h.analyzedAt).toLocaleString() : `Analysis #${history.length - idx}`}
+                      </span>
+                      <AnalysisSourceBadge source={h.source} size="sm" />
+                    </div>
+                    {h.dateRangeStart && h.dateRangeEnd && (
+                      <span className="text-muted-foreground">{h.dateRangeStart} — {h.dateRangeEnd}</span>
+                    )}
+                  </div>
+                  <span className={cn("font-bold tabular-nums shrink-0", getScoreColor(mainAnalysisScore(h)))}>
+                    {mainAnalysisScore(h)}
                   </span>
-                  {h.dateRangeStart && h.dateRangeEnd && (
-                    <span className="text-muted-foreground ml-2">({h.dateRangeStart} — {h.dateRangeEnd})</span>
-                  )}
-                </button>
-                <div className="flex items-center gap-3 shrink-0">
-                  <span className="text-muted-foreground">{h.reviewsAnalyzed} {t("bình luận", "reviews")}</span>
-                  <span className={cn("font-semibold", getScoreColor(mainAnalysisScore(h)))}>{mainAnalysisScore(h)}/100</span>
                   <button
-                    onClick={(e) => { e.stopPropagation(); if (h.analyzedAt) handleDelete(h.analyzedAt); }}
-                    className="p-1 rounded hover:bg-red-500/10 text-muted-foreground hover:text-red-500 transition-colors"
-                    title={t("Xóa phân tích này", "Delete this analysis")}
+                    type="button"
+                    onClick={() => setModalAnalysis(h)}
+                    className="px-2 py-1 rounded-md bg-primary/10 text-primary text-[10px] font-medium shrink-0"
+                  >
+                    {t("Chi tiết", "Details")}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => h.analyzedAt && handleDelete(h.analyzedAt)}
+                    className="p-1 rounded hover:bg-red-500/10 text-muted-foreground hover:text-red-500 shrink-0"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 </div>
-              </div>
-            ))}
-          </div>
-          {history.length > 1 && (
-            <div className="px-3 py-2 border-t border-border/50 bg-muted/30">
-              <button
-                onClick={handleDeleteAll}
-                className="text-xs text-red-500 hover:text-red-600 flex items-center gap-1 transition-colors"
-              >
-                <Trash2 className="w-3 h-3" /> {t("Xóa tất cả phân tích", "Delete all analyses")}
-              </button>
+              ))}
             </div>
-          )}
-        </div>
-      )}
-
-      {viewingIdx != null && (
-        <div className="mb-3 flex items-center gap-2">
-          <span className="text-xs bg-amber-500/10 text-amber-600 px-2 py-0.5 rounded font-medium">
-            {t("Đang xem phân tích cũ", "Viewing historical analysis")}
-          </span>
-          <button onClick={() => setViewingIdx(null)} className="text-xs text-primary hover:underline">
-            {t("Xem bản mới nhất", "View latest")}
-          </button>
-        </div>
-      )}
-
-      <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3 flex-wrap">
-        <span className="font-medium text-foreground">
-          {totalReviews} {t("bình luận đã phân tích", "reviews analyzed")}
-        </span>
-        {view!.dateRangeStart && view!.dateRangeEnd && (
-          <>
-            <span>|</span>
-            <span>
-              {t("Bình luận trong khoảng:", "Reviews from:")} {view!.dateRangeStart} — {view!.dateRangeEnd}
-            </span>
-          </>
-        )}
-        {view!.analyzedAt && (
-          <>
-            <span>|</span>
-            <span>
-              {t("Phân tích lúc:", "Analyzed:")} {new Date(view!.analyzedAt).toLocaleString()}
-            </span>
-          </>
-        )}
-      </div>
-
-      <div className="flex items-center gap-2 text-xs text-muted-foreground mb-3 flex-wrap">
-        {Object.entries(buckets).map(([label, count]) => (
-          <span key={label} className="flex items-center gap-1">
-            <span className={cn("w-2 h-2 rounded-full", BUCKET_COLORS[label] ?? "bg-gray-400")} />
-            {bucketDisplayName(label, contentLang)}: {count}
-          </span>
-        ))}
-      </div>
-
-      {localizing && contentLang === "en" && (
-        <p className="text-xs text-muted-foreground mb-2">{t("Đang dịch sang tiếng Anh…", "Translating to English…")}</p>
-      )}
-
-      <RedFlagSection
-        redFlagAtAGlance={view!.redFlagAtAGlance}
-        redFlagsChecklist={view!.redFlagsChecklist}
-        rubric={view!.rubric}
-      />
-
-      <RubricPanel rubric={view!.rubric} />
-
-      <div className="bg-muted/30 rounded-lg p-4 mb-4">
-        <AnalysisBulletBlock items={getSummaryBullets(view!)} className="list-disc space-y-1.5 pl-5 text-sm leading-relaxed text-muted-foreground" />
-      </div>
-
-      {getRecentTrendBullets(view!).length > 0 && (
-        <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-3 mb-4">
-          <h4 className="text-xs font-medium text-blue-500 mb-2 flex items-center gap-1">
-            <TrendingUp className="w-3 h-3" /> {t("Xu hướng gần đây", "Recent Trend")}
-          </h4>
-          <AnalysisBulletBlock items={getRecentTrendBullets(view!)} className="list-disc space-y-1.5 pl-5 text-sm text-muted-foreground" />
-        </div>
-      )}
-
-      <div className="mb-5">
-        <h4 className="text-sm font-medium mb-3">{t("Phân bố cảm xúc bình luận", "Review Distribution")}</h4>
-        <div className="flex gap-0.5 h-8 rounded-lg overflow-hidden">
-          {Object.entries(buckets).map(([label, count]) => {
-            const pct = totalReviews > 0 ? (count / totalReviews) * 100 : 0;
-            if (pct === 0) return null;
-            return (
-              <div
-                key={label}
-                className={cn("flex items-center justify-center transition-all duration-500 text-[10px] font-medium text-white", BUCKET_COLORS[label] ?? "bg-gray-400")}
-                style={{ width: `${pct}%`, opacity: 0.85 }}
-                title={`${bucketDisplayName(label, contentLang)}: ${count} (${pct.toFixed(0)}%)`}
-              >
-                {pct >= 8 && `${count}`}
+            {history.length > 1 && (
+              <div className="px-3 py-2 border-t border-border/50 bg-muted/30">
+                <button type="button" onClick={handleDeleteAll} className="text-xs text-red-500 hover:text-red-600 flex items-center gap-1">
+                  <Trash2 className="w-3 h-3" /> {t("Xóa tất cả phân tích", "Delete all analyses")}
+                </button>
               </div>
-            );
-          })}
-        </div>
-        <div className="flex gap-0.5 mt-1">
-          {Object.entries(buckets).map(([label, count]) => {
-            const pct = totalReviews > 0 ? (count / totalReviews) * 100 : 0;
-            if (pct === 0) return null;
-            const starNum = Object.keys(BUCKET_COLORS).indexOf(label) + 1;
-            return (
-              <div key={label} className="text-[10px] text-muted-foreground text-center" style={{ width: `${pct}%` }}>
-                {starNum > 0 ? `${starNum}★ (${pct.toFixed(0)}%)` : label}
+            )}
+          </div>
+        )}
+
+        {overview && (
+          <div className="rounded-lg border border-border/60 bg-muted/20 p-4 space-y-3">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                {overview.developerName && (
+                  <p className="text-sm text-muted-foreground mb-1">
+                    <span className="font-medium text-foreground">{t("Nhà phát triển:", "Developer:")}</span>{" "}
+                    {overview.developerName}
+                  </p>
+                )}
+                <p className="text-xs text-muted-foreground">
+                  {overview.reviewsAnalyzed} {t("bình luận", "reviews")}
+                  {overview.dateRangeStart && overview.dateRangeEnd && (
+                    <> · {overview.dateRangeStart} — {overview.dateRangeEnd}</>
+                  )}
+                </p>
               </div>
-            );
-          })}
-        </div>
+              <div className="text-right">
+                <div className={cn("text-2xl font-bold tabular-nums", getScoreColor(mainAnalysisScore(overview)))}>
+                  {mainAnalysisScore(overview)}
+                </div>
+                <div className="text-[10px] text-muted-foreground">{t("Điểm tổng", "Overall score")}</div>
+              </div>
+            </div>
+            <p className="text-sm text-muted-foreground line-clamp-3">
+              {getSummaryBullets(overview)[0] ?? overview.summary}
+            </p>
+            <button
+              type="button"
+              onClick={() => setModalAnalysis(overview)}
+              className="px-4 py-2 text-xs rounded-lg bg-primary text-primary-foreground font-medium"
+            >
+              {t("Xem chi tiết đánh giá", "View evaluation details")}
+            </button>
+          </div>
+        )}
       </div>
-    </div>
+
+      <AnalysisDetailModal analysis={modalView} onClose={() => setModalAnalysis(null)} />
+    </>
   );
 }
 

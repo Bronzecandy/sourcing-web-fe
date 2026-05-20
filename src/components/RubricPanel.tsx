@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useState, type ReactNode } from "react";
 import { ChevronDown, ChevronRight, BookMarked, Sparkles, Blend } from "lucide-react";
 import type { RubricBlock, RubricCriterionOutput, RubricPartRollup, RubricTestDecision } from "@/types";
 import { useUiCopy } from "@/lib/use-ui-copy";
@@ -96,7 +96,45 @@ function scoreOrFlag(row: RubricCriterionOutput, t: (vi: string, en: string) => 
   return "N/A";
 }
 
-export default function RubricPanel({ rubric }: { rubric: RubricBlock | undefined }) {
+function buildPartCollapsedBullets(
+  partId: string,
+  rows: RubricCriterionOutput[],
+  t: (vi: string, en: string) => string,
+): { key: string; content: ReactNode }[] {
+  const bullets: { key: string; content: ReactNode }[] = [];
+  for (const row of rows) {
+    if (partId === "red_flag") {
+      bullets.push({
+        key: `${row.id}-flag`,
+        content: (
+          <>
+            <span className="font-medium text-foreground">{row.elementVi}:</span> {scoreOrFlag(row, t)}
+          </>
+        ),
+      });
+      continue;
+    }
+    if (row.reasoning?.trim()) {
+      bullets.push({
+        key: `${row.id}-reason`,
+        content: (
+          <>
+            <span className="font-medium text-foreground">{row.elementVi}:</span> {row.reasoning.trim()}
+          </>
+        ),
+      });
+    }
+  }
+  return bullets;
+}
+
+export default function RubricPanel({
+  rubric,
+  showAggregateScore = true,
+}: {
+  rubric: RubricBlock | undefined;
+  showAggregateScore?: boolean;
+}) {
   const { t, lang } = useUiCopy();
   const [openParts, setOpenParts] = useState<Record<string, boolean>>({});
 
@@ -146,7 +184,7 @@ export default function RubricPanel({ rubric }: { rubric: RubricBlock | undefine
       <div className="flex flex-col gap-4">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
           <div className="space-y-1.5 min-w-0 flex-1 text-left">
-            <h3 className="text-sm font-semibold text-left">{t("Bảng điểm rubric", "Rubric scores")}</h3>
+            <h3 className="text-sm font-semibold text-left">{t("Bảng chấm điểm", "Evaluation scorecard")}</h3>
             <p className="text-[11px] text-muted-foreground leading-snug">
               {t("Manifest v", "Manifest v")}
               {rubric.manifestVersion} ·{" "}
@@ -156,7 +194,7 @@ export default function RubricPanel({ rubric }: { rubric: RubricBlock | undefine
             </p>
             {rubric.genrePackResolved != null && rubric.genrePackResolved !== "" && (
               <p className="text-[11px] text-muted-foreground leading-snug text-left">
-                <span className="font-medium text-foreground">{t("Gói rubric:", "Rubric pack:")}</span>{" "}
+                <span className="font-medium text-foreground">{t("Gói chấm:", "Scoring pack:")}</span>{" "}
                 <span className="font-medium text-foreground">{rubric.genrePackResolved}</span>
                 {" — "}
                 {rubric.genrePackResolved === "base"
@@ -171,45 +209,23 @@ export default function RubricPanel({ rubric }: { rubric: RubricBlock | undefine
               </p>
             )}
           </div>
-          <div className="shrink-0 w-full sm:w-auto sm:min-w-[220px] rounded-lg border border-border/70 bg-muted/25 px-4 py-3 text-left space-y-1.5">
-            <p className="text-xs">
-              <span className="text-muted-foreground">{t("Điểm có trọng số:", "Weighted score:")} </span>
-              <span className="font-bold tabular-nums text-base">{rubric.aggregate.weightedScore ?? "—"}</span>
-              {rubric.aggregate.band5 != null && (
-                <span className="text-muted-foreground"> ({t("thang 1–5", "band 1–5")}: {rubric.aggregate.band5})</span>
-              )}
-            </p>
-            <p className="text-xs">
-              <span className="text-muted-foreground">{t("Quyết định:", "Decision:")} </span>
-              <span className={cn("font-medium", DECISION_TEXT_CLASS[testDecision])}>
-                {decisionLabelViEn(testDecision, t)}
-              </span>
-              {rubric.aggregate.redFlagHardGate && testDecision !== "blocked_red_flag" && (
-                <span className="ml-2 text-red-600 font-medium">{t("(Red flag cứng)", "(Hard red flag)")}</span>
-              )}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              {t(`Tiêu chí điểm <30: ${rubric.aggregate.lowScoreCriteriaCount}`, `Criteria score <30: ${rubric.aggregate.lowScoreCriteriaCount}`)}
-            </p>
-          </div>
-        </div>
-
-        <div className="rounded-md border border-border/60 bg-muted/15 px-3 py-2.5 text-left">
-          <p className="text-[11px] text-muted-foreground leading-relaxed">
-            {rubric.aggregate.globalWeightDenominator != null && rubric.aggregate.globalWeightDenominator > 0
-              ? t(
-                  `Công thức điểm tổng: trung bình có trọng số theo từng phần, rồi Σ(ĐTB phần × trọng số phần) ÷ ${rubric.aggregate.globalWeightDenominator.toFixed(2)} (chỉ các phần có ít nhất một tiêu chí có điểm).`,
-                  `Formula: weighted average per part, then Σ(part avg × part weight) ÷ ${rubric.aggregate.globalWeightDenominator.toFixed(2)} (parts with at least one scored criterion only). No separate LLM “master” score.`,
-                )
-              : t(
-                  "Điểm tổng được tính từ điểm từng tiêu chí theo manifest (kết quả cũ có thể thiếu chi tiết phần).",
-                  "Total score is derived from per-criterion scores per the manifest (older saved runs may omit part breakdown).",
+          {showAggregateScore && (
+            <div className="shrink-0 w-full sm:w-auto sm:min-w-[200px] rounded-lg border border-border/70 bg-muted/25 px-4 py-3 text-left space-y-1.5">
+              <p className="text-xs">
+                <span className="text-muted-foreground">{t("Quyết định thử nghiệm:", "Test decision:")} </span>
+                <span className={cn("font-medium", DECISION_TEXT_CLASS[testDecision])}>
+                  {decisionLabelViEn(testDecision, t)}
+                </span>
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {t(
+                  `Tiêu chí điểm thấp (<30): ${rubric.aggregate.lowScoreCriteriaCount}`,
+                  `Low criteria (<30): ${rubric.aggregate.lowScoreCriteriaCount}`,
                 )}
-          </p>
+              </p>
+            </div>
+          )}
         </div>
-        <p className="text-[10px] text-muted-foreground text-left">
-          {t("Red Flag xem khối ưu tiên phía trên + cột Có/Không dưới đây.", "See Red Flag block above and Yes/No column below.")}
-        </p>
       </div>
 
       <div className="space-y-2">
@@ -217,7 +233,9 @@ export default function RubricPanel({ rubric }: { rubric: RubricBlock | undefine
           const rows = grouped.get(partId) ?? [];
           if (rows.length === 0) return null;
           const label = PART_LABELS[partId]?.[lang === "vi" ? "vi" : "en"] ?? partId;
-          const open = openParts[partId] ?? true;
+          const open = openParts[partId] ?? false;
+          const rollup = rollupByPart.get(partId);
+          const collapsedBullets = buildPartCollapsedBullets(partId, rows, t);
           return (
             <div key={partId} className="border border-border/60 rounded-lg overflow-hidden">
               <button
@@ -229,7 +247,6 @@ export default function RubricPanel({ rubric }: { rubric: RubricBlock | undefine
                 <span className="flex-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                   <span>{label}</span>
                   {partId !== "red_flag" && (() => {
-                    const rollup = rollupByPart.get(partId);
                     const effPct =
                       rollup?.weightInTotal != null ? Math.round(rollup.weightInTotal * 100) : null;
                     const pct = effPct != null ? `${effPct}%` : "—";
@@ -237,22 +254,24 @@ export default function RubricPanel({ rubric }: { rubric: RubricBlock | undefine
                       rollup?.partAverageScore != null
                         ? rollup.partAverageScore.toFixed(1)
                         : "—";
-                    const skip =
-                      rollup && rollup.includedInGlobalScore === false
-                        ? t(" · không vào điểm tổng", " · excluded from total")
-                        : "";
                     return (
                       <span className="text-xs font-normal text-muted-foreground">
-                        {t("Trọng số phần:", "Part weight:")} <span className="tabular-nums font-medium text-foreground">{pct}</span>
+                        {t("ĐTB:", "Avg:")} <span className="tabular-nums font-medium text-foreground">{avg}</span>
                         {" · "}
-                        {t("ĐTB phần:", "Part avg:")} <span className="tabular-nums font-medium text-foreground">{avg}</span>
-                        {skip}
+                        {t("Trọng số:", "Weight:")} <span className="tabular-nums font-medium text-foreground">{pct}</span>
                       </span>
                     );
                   })()}
                 </span>
                 <span className="text-xs font-normal text-muted-foreground shrink-0">({rows.length})</span>
               </button>
+              {!open && collapsedBullets.length > 0 && (
+                <ul className="px-3 pb-2 pt-2 text-xs text-muted-foreground leading-snug border-t border-border/40 list-disc pl-5 space-y-1">
+                  {collapsedBullets.map((b) => (
+                    <li key={b.key}>{b.content}</li>
+                  ))}
+                </ul>
+              )}
               {open && (
                 <div className="divide-y divide-border/50">
                   {rows.map((row) => (
