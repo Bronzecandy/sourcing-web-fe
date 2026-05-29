@@ -1,8 +1,14 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useCallback } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useContentLang } from "@/lib/content-language";
 import { localizeAnalysisToEn, getSummaryBullets, mainAnalysisScore } from "@/lib/analysis-localize";
 import ReviewWindowPicker from "@/components/ReviewWindowPicker";
+import AnalysisProgressPanel, {
+  INITIAL_ANALYSIS_PROGRESS,
+  appendProgressLog,
+  type AnalysisProgressState,
+} from "@/components/AnalysisProgressPanel";
+import type { AnalysisProgressUpdate } from "@/lib/analysis-stream";
 import AnalysisDetailModal from "@/components/AnalysisDetailModal";
 import AnalysisSourceBadge from "@/components/AnalysisSourceBadge";
 import { Brain, Search, Sparkles, ExternalLink, Trash2, Globe, Upload, FileSpreadsheet, X } from "lucide-react";
@@ -18,6 +24,8 @@ export default function AIAnalysisPage() {
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [reviewWindow, setReviewWindow] = useState<ReviewWindow>(DEFAULT_REVIEW_WINDOW);
   const [modalAnalysis, setModalAnalysis] = useState<AiAnalysis | null>(null);
+  const [analysisProgress, setAnalysisProgress] =
+    useState<AnalysisProgressState>(INITIAL_ANALYSIS_PROGRESS);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
   const { lang: contentLang } = useContentLang();
@@ -39,9 +47,14 @@ export default function AIAnalysisPage() {
     staleTime: 30_000,
   });
 
+  const onAnalysisProgress = useCallback((p: AnalysisProgressUpdate) => {
+    setAnalysisProgress((prev) => appendProgressLog(prev, p.message, p.percent));
+  }, []);
+
   const analyzeMutation = useMutation({
     mutationFn: (args: { input: string; platform: "taptap" | "steam" }) =>
-      triggerExternalAnalysis(args.input, args.platform, reviewWindow),
+      triggerExternalAnalysis(args.input, args.platform, reviewWindow, onAnalysisProgress),
+    onMutate: () => setAnalysisProgress(INITIAL_ANALYSIS_PROGRESS),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["all-analyses"] });
       setModalAnalysis(data);
@@ -49,13 +62,16 @@ export default function AIAnalysisPage() {
   });
 
   const csvMutation = useMutation({
-    mutationFn: (file: File) => triggerCsvAnalysis(file, reviewWindow),
+    mutationFn: (file: File) => triggerCsvAnalysis(file, reviewWindow, onAnalysisProgress),
+    onMutate: () => setAnalysisProgress(INITIAL_ANALYSIS_PROGRESS),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["all-analyses"] });
       setModalAnalysis(data);
       setCsvFile(null);
     },
   });
+
+  const isAnalyzing = analyzeMutation.isPending || csvMutation.isPending;
 
   const handleSubmit = () => {
     const trimmed = input.trim();
@@ -106,6 +122,8 @@ export default function AIAnalysisPage() {
 
         <ReviewWindowPicker value={reviewWindow} onChange={setReviewWindow} />
 
+        {isAnalyzing && <AnalysisProgressPanel progress={analysisProgress} />}
+
         <div className="flex flex-wrap items-center gap-3">
           <span className="text-xs font-medium text-muted-foreground">{t("Nguồn:", "Source:")}</span>
           <select
@@ -136,10 +154,10 @@ export default function AIAnalysisPage() {
           </div>
           <button
             onClick={handleSubmit}
-            disabled={analyzeMutation.isPending || !input.trim()}
+            disabled={isAnalyzing || !input.trim()}
             className="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg text-sm font-medium disabled:opacity-50 flex items-center gap-2"
           >
-            {analyzeMutation.isPending ? (
+            {analyzeMutation.isPending && !csvMutation.isPending ? (
               <>
                 <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
                 {t("Đang phân tích…", "Analyzing…")}
@@ -188,7 +206,7 @@ export default function AIAnalysisPage() {
             <div className="flex gap-2 mt-3">
               <button
                 onClick={handleCsvSubmit}
-                disabled={csvMutation.isPending}
+                disabled={isAnalyzing}
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium disabled:opacity-50"
               >
                 {csvMutation.isPending ? t("Đang phân tích…", "Analyzing…") : t("Phân tích file", "Analyze file")}

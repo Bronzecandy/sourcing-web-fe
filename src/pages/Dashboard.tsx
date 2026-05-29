@@ -61,7 +61,7 @@ export default function Dashboard() {
       <div>
         <h1 className="text-2xl font-bold">{t("Tổng quan", "Dashboard")}</h1>
         <p className="text-muted-foreground text-sm mt-1">
-          {t("Tổng quan bảng xếp hạng Top 200 game TapTap", "TapTap Top 200 Game Rankings Overview")}
+          {t("Tổng quan bảng xếp hạng Top Ranking game TapTap", "TapTap Top Ranking Overview")}
         </p>
       </div>
 

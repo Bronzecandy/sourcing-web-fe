@@ -11,7 +11,7 @@ import { cn } from "@/lib/utils";
 
 const NAV_ITEMS = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
-  { to: "/ranking", icon: Trophy, label: "Top 200 Ranking" },
+  { to: "/ranking", icon: Trophy, label: "Top Ranking" },
   { to: "/potential", icon: TrendingUp, label: "Potential Analysis" },
   { to: "/ai-analysis", icon: Brain, label: "AI Review Analysis" },
   { to: "/libraries", icon: Library, label: "Rubric Libraries" },

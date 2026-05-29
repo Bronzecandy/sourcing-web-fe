@@ -2,7 +2,7 @@ import { useMemo, useState, type ReactNode } from "react";
 import { ChevronDown, ChevronRight, BookMarked, Sparkles, Blend } from "lucide-react";
 import type { RubricBlock, RubricCriterionOutput, RubricPartRollup, RubricTestDecision } from "@/types";
 import { useUiCopy } from "@/lib/use-ui-copy";
-import { cn } from "@/lib/utils";
+import { cn, getScoreColor } from "@/lib/utils";
 
 const PART_LABELS: Record<string, { vi: string; en: string }> = {
   overview: { vi: "Tổng quan", en: "Overview" },
@@ -250,20 +250,24 @@ export default function RubricPanel({
                     const effPct =
                       rollup?.weightInTotal != null ? Math.round(rollup.weightInTotal * 100) : null;
                     const pct = effPct != null ? `${effPct}%` : "—";
-                    const avg =
-                      rollup?.partAverageScore != null
-                        ? rollup.partAverageScore.toFixed(1)
-                        : "—";
                     return (
                       <span className="text-xs font-normal text-muted-foreground">
-                        {t("ĐTB:", "Avg:")} <span className="tabular-nums font-medium text-foreground">{avg}</span>
-                        {" · "}
-                        {t("Trọng số:", "Weight:")} <span className="tabular-nums font-medium text-foreground">{pct}</span>
+                        {t("Trọng số:", "Weight:")}{" "}
+                        <span className="tabular-nums font-medium text-foreground">{pct}</span>
                       </span>
                     );
                   })()}
                 </span>
-                <span className="text-xs font-normal text-muted-foreground shrink-0">({rows.length})</span>
+                {partId !== "red_flag" && rollup?.partAverageScore != null && (
+                  <span
+                    className={cn(
+                      "text-sm tabular-nums font-bold shrink-0",
+                      getScoreColor(rollup.partAverageScore),
+                    )}
+                  >
+                    {rollup.partAverageScore.toFixed(1)}
+                  </span>
+                )}
               </button>
               {!open && collapsedBullets.length > 0 && (
                 <ul className="px-3 pb-2 pt-2 text-xs text-muted-foreground leading-snug border-t border-border/40 list-disc pl-5 space-y-1">
@@ -280,9 +284,20 @@ export default function RubricPanel({
                         <span className="font-medium text-foreground">{row.elementVi}</span>
                         <div className="flex items-center gap-2">
                           {sourceBadge(row.source, t)}
-                          <span className="font-bold tabular-nums text-right min-w-[4rem]">
-                            {scoreOrFlag(row, t)}
-                          </span>
+                          {row.partId !== "red_flag" && row.score != null ? (
+                            <span
+                              className={cn(
+                                "text-sm font-bold tabular-nums text-right min-w-[4rem]",
+                                getScoreColor(row.score),
+                              )}
+                            >
+                              {row.score}
+                            </span>
+                          ) : (
+                            <span className="font-bold tabular-nums text-right min-w-[4rem]">
+                              {scoreOrFlag(row, t)}
+                            </span>
+                          )}
                         </div>
                       </div>
                       {partId !== "red_flag" && (
@@ -299,7 +314,9 @@ export default function RubricPanel({
                         </p>
                       )}
                       {row.reasoning && (
-                        <p className="text-muted-foreground leading-snug">{row.reasoning}</p>
+                        <p className="text-sm font-semibold text-foreground leading-snug rounded-md border border-border/60 bg-muted/35 px-2.5 py-2">
+                          {row.reasoning}
+                        </p>
                       )}
                       {(row.strengths?.length ?? 0) > 0 && (
                         <div className="rounded-md bg-emerald-500/10 border border-emerald-500/15 px-2 py-1.5 space-y-0.5">

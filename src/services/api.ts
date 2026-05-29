@@ -8,12 +8,15 @@ import type {
   BreakoutGame,
   ReserveGrowthGame,
   GamePotentialDetail,
+  PotentialBreakdown,
   AiAnalysis,
   ApiResponse,
   LibraryPendingItem,
 } from "../types";
 import type { ReviewWindow } from "@/types/review-window";
 import type { HistoryRange } from "@/types/history-range";
+import type { AnalysisProgressUpdate } from "@/lib/analysis-stream";
+import { postAnalysisStream, postCsvAnalysisStream } from "@/lib/analysis-stream";
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || "/api",
@@ -34,6 +37,7 @@ export async function fetchRankings(params: {
   search?: string;
   tag?: string;
   platform?: "combined" | "android" | "ios";
+  segment?: "reserve" | "launched";
 }) {
   const { data } = await api.get("/games/rankings", { params });
   return data as {
@@ -111,10 +115,11 @@ export async function fetchCompareGames(appIds: number[], days?: number) {
 
 export async function fetchPotentialScores(
   days?: number,
-  platform?: "combined" | "android" | "ios"
+  platform?: "combined" | "android" | "ios",
+  segment: "reserve" | "launched" = "reserve",
 ): Promise<PotentialScore[]> {
   const { data } = await api.get<ApiResponse<PotentialScore[]>>("/ranking/potential", {
-    params: { days, platform },
+    params: { days, platform, segment },
   });
   return data.data;
 }
@@ -122,10 +127,11 @@ export async function fetchPotentialScores(
 export async function fetchBreakoutGames(
   days?: number,
   threshold?: number,
-  platform?: "combined" | "android" | "ios"
+  platform?: "combined" | "android" | "ios",
+  segment: "reserve" | "launched" = "reserve",
 ): Promise<BreakoutGame[]> {
   const { data } = await api.get<ApiResponse<BreakoutGame[]>>("/ranking/breakout", {
-    params: { days, threshold, platform },
+    params: { days, threshold, platform, segment },
   });
   return data.data;
 }
@@ -133,9 +139,21 @@ export async function fetchBreakoutGames(
 export async function fetchGamePotentialDetail(
   appId: number,
   days?: number,
-  platform?: "combined" | "android" | "ios"
+  platform?: "combined" | "android" | "ios",
+  segment: "reserve" | "launched" = "reserve",
 ): Promise<GamePotentialDetail | null> {
   const { data } = await api.get<ApiResponse<GamePotentialDetail | null>>(`/ranking/potential/${appId}`, {
+    params: { days, platform, segment },
+  });
+  return data.data;
+}
+
+export async function fetchGamePotentialBreakdown(
+  appId: number,
+  days?: number,
+  platform?: "combined" | "android" | "ios",
+): Promise<PotentialBreakdown> {
+  const { data } = await api.get<ApiResponse<PotentialBreakdown>>(`/ranking/potential/${appId}/breakdown`, {
     params: { days, platform },
   });
   return data.data;
@@ -173,7 +191,15 @@ export async function deleteAnalysis(appId: number, analyzedAt?: string): Promis
 export async function triggerAnalysis(
   appId: number,
   reviewWindow?: ReviewWindow,
+  onProgress?: (p: AnalysisProgressUpdate) => void,
 ): Promise<AiAnalysis> {
+  if (onProgress) {
+    return postAnalysisStream(
+      `/analysis/analyze/${appId}`,
+      { reviewWindow: reviewWindow ?? { mode: "all" } },
+      onProgress,
+    );
+  }
   const { data } = await api.post<ApiResponse<AiAnalysis>>(
     `/analysis/analyze/${appId}`,
     { reviewWindow: reviewWindow ?? { mode: "all" } },
@@ -186,7 +212,15 @@ export async function triggerExternalAnalysis(
   input: string,
   platform: "taptap" | "steam" = "taptap",
   reviewWindow?: ReviewWindow,
+  onProgress?: (p: AnalysisProgressUpdate) => void,
 ): Promise<AiAnalysis> {
+  if (onProgress) {
+    return postAnalysisStream(
+      "/analysis/analyze-external",
+      { input, platform, reviewWindow: reviewWindow ?? { mode: "all" } },
+      onProgress,
+    );
+  }
   const { data } = await api.post<ApiResponse<AiAnalysis>>(
     "/analysis/analyze-external",
     { input, platform, reviewWindow: reviewWindow ?? { mode: "all" } },
@@ -198,7 +232,11 @@ export async function triggerExternalAnalysis(
 export async function triggerCsvAnalysis(
   file: File,
   reviewWindow?: ReviewWindow,
+  onProgress?: (p: AnalysisProgressUpdate) => void,
 ): Promise<AiAnalysis> {
+  if (onProgress) {
+    return postCsvAnalysisStream(file, reviewWindow ?? { mode: "all" }, onProgress);
+  }
   const formData = new FormData();
   formData.append("file", file);
   formData.append("reviewWindow", JSON.stringify(reviewWindow ?? { mode: "all" }));

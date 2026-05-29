@@ -1,15 +1,21 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
 } from "recharts";
-import { ArrowLeft, Brain, Star, Users, Heart, MessageSquare, TrendingUp, Activity, Shield, Database, History, ChevronDown, ChevronUp, Trash2, Sparkles } from "lucide-react";
-import { fetchGameDetail, fetchGameReviews, triggerAnalysis, fetchGamePotentialDetail, fetchLatestAnalysis, fetchAnalysisHistory, deleteAnalysis } from "@/services/api";
+import { ArrowLeft, Brain, Star, Users, Heart, MessageSquare, TrendingUp, Activity, Shield, Database, History, ChevronDown, ChevronUp, Trash2, Sparkles, Calendar, Download } from "lucide-react";
+import { fetchGameDetail, fetchGameReviews, triggerAnalysis, fetchGamePotentialBreakdown, fetchLatestAnalysis, fetchAnalysisHistory, deleteAnalysis } from "@/services/api";
 import { useContentLang } from "@/lib/content-language";
 import { localizeAnalysisToEn, getSummaryBullets, mainAnalysisScore } from "@/lib/analysis-localize";
 import ReviewWindowPicker from "@/components/ReviewWindowPicker";
+import AnalysisProgressPanel, {
+  INITIAL_ANALYSIS_PROGRESS,
+  appendProgressLog,
+  type AnalysisProgressState,
+} from "@/components/AnalysisProgressPanel";
+import type { AnalysisProgressUpdate } from "@/lib/analysis-stream";
 import HistoryRangePicker from "@/components/HistoryRangePicker";
 import type { HistoryRange } from "@/types/history-range";
 import AnalysisDetailModal from "@/components/AnalysisDetailModal";
@@ -18,7 +24,7 @@ import { DEFAULT_REVIEW_WINDOW, type ReviewWindow } from "@/types/review-window"
 import { buildFanReserveDeltaSeries, formatDelta } from "@/lib/chart-delta";
 import { useUiCopy, potentialRadarMetric } from "@/lib/use-ui-copy";
 import { cn, formatNumber, getScoreColor } from "@/lib/utils";
-import type { AiAnalysis, GameReview, GamePotentialDetail } from "@/types";
+import type { AiAnalysis, GameReview, GamePotentialDetail, PotentialBreakdown } from "@/types";
 
 const STAR_COLORS: Record<string, string> = {
   "1": "bg-red-500",
@@ -50,9 +56,9 @@ export default function GameDetail() {
   });
 
   const [potentialDays, setPotentialDays] = useState(14);
-  const { data: potentialDetail } = useQuery({
-    queryKey: ["potential-detail", appId, potentialDays],
-    queryFn: () => fetchGamePotentialDetail(appId, potentialDays, "combined"),
+  const { data: potentialBreakdown } = useQuery({
+    queryKey: ["potential-breakdown", appId, potentialDays],
+    queryFn: () => fetchGamePotentialBreakdown(appId, potentialDays, "combined"),
     enabled: appId > 0,
   });
 
@@ -71,9 +77,16 @@ export default function GameDetail() {
   });
 
   const [reviewWindow, setReviewWindow] = useState<ReviewWindow>(DEFAULT_REVIEW_WINDOW);
+  const [analysisProgress, setAnalysisProgress] =
+    useState<AnalysisProgressState>(INITIAL_ANALYSIS_PROGRESS);
+
+  const onAnalysisProgress = useCallback((p: AnalysisProgressUpdate) => {
+    setAnalysisProgress((prev) => appendProgressLog(prev, p.message, p.percent));
+  }, []);
 
   const analysisMutation = useMutation({
-    mutationFn: () => triggerAnalysis(appId, reviewWindow),
+    mutationFn: () => triggerAnalysis(appId, reviewWindow, onAnalysisProgress),
+    onMutate: () => setAnalysisProgress(INITIAL_ANALYSIS_PROGRESS),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["ai-analysis", appId] });
       queryClient.invalidateQueries({ queryKey: ["ai-analysis-history", appId] });
@@ -181,10 +194,20 @@ export default function GameDetail() {
       </div>
 
       {/* Stats — no Views, enhanced Reviews */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
         <MiniStat icon={<Star className="w-4 h-4 text-yellow-500" />} label={t("Đánh giá", "Rating")} value={game.rating ? `${game.rating}/10` : "N/A"} />
         <MiniStat icon={<Users className="w-4 h-4" />} label={t("Người hâm mộ", "Fans")} value={game.fansCount != null ? formatNumber(game.fansCount) : "N/A"} />
         <MiniStat icon={<Heart className="w-4 h-4" />} label={t("Đăng ký trước", "Reserves")} value={game.reserveCount != null ? formatNumber(game.reserveCount) : "N/A"} />
+        <MiniStat
+          icon={<Download className="w-4 h-4" />}
+          label={t("Lượt tải", "Downloads")}
+          value={game.hitsTotal != null ? formatNumber(game.hitsTotal) : "N/A"}
+        />
+        <MiniStat
+          icon={<Calendar className="w-4 h-4" />}
+          label={t("Ngày ra mắt", "Release date")}
+          value={game.releaseDate ?? "N/A"}
+        />
         <MiniStat
           icon={<MessageSquare className="w-4 h-4" />}
           label={t("Bình luận", "Reviews")}
@@ -197,12 +220,17 @@ export default function GameDetail() {
       <ReviewDistributionCard distribution={game.reviewDistribution} actualCount={game.actualReviewCount} />
 
       {/* Potential Analysis — moved above charts */}
-      <PotentialSection detail={potentialDetail} days={potentialDays} setDays={setPotentialDays} />
+      <PotentialBreakdownSection
+        breakdown={potentialBreakdown}
+        days={potentialDays}
+        setDays={setPotentialDays}
+      />
 
       {/* AI Analysis — moved above charts */}
       <AIAnalysisSection
         analysisResult={analysisResult}
         analysisMutation={analysisMutation}
+        analysisProgress={analysisProgress}
         history={analysisHistory ?? []}
         reviewWindow={reviewWindow}
         onReviewWindowChange={setReviewWindow}
@@ -372,12 +400,14 @@ function ReviewDistributionCard({ distribution, actualCount }: { distribution: R
 function AIAnalysisSection({
   analysisResult,
   analysisMutation,
+  analysisProgress,
   history,
   reviewWindow,
   onReviewWindowChange,
 }: {
   analysisResult: AiAnalysis | undefined;
   analysisMutation: { mutate: () => void; isPending: boolean; isError: boolean; error: Error | null };
+  analysisProgress: AnalysisProgressState;
   history: AiAnalysis[];
   reviewWindow: ReviewWindow;
   onReviewWindowChange: (w: ReviewWindow) => void;
@@ -423,17 +453,20 @@ function AIAnalysisSection({
   };
 
   const runBlock = (
-    <div className="mb-4 text-left max-w-lg mx-auto">
+    <div className="mb-4 max-w-lg mx-auto text-center">
       <ReviewWindowPicker value={reviewWindow} onChange={onReviewWindowChange} className="mb-4" />
+      {analysisMutation.isPending && (
+        <AnalysisProgressPanel progress={analysisProgress} className="mb-4 text-left" />
+      )}
       <button
         onClick={() => analysisMutation.mutate()}
         disabled={analysisMutation.isPending}
-        className="px-5 py-2.5 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg text-sm font-medium hover:from-purple-700 hover:to-blue-700 disabled:opacity-50 transition-all shadow-md"
+        className="mx-auto px-6 py-2.5 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg text-sm font-medium hover:from-purple-700 hover:to-blue-700 disabled:opacity-50 transition-all shadow-md inline-flex items-center justify-center"
       >
         {analysisMutation.isPending ? (
           <span className="flex items-center gap-2 justify-center">
             <span className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
-            {t("Đang phân tích bình luận…", "Analyzing reviews...")}
+            {t("Đang phân tích…", "Analyzing…")}
           </span>
         ) : (
           <span className="flex items-center gap-2 justify-center">
@@ -579,12 +612,101 @@ function AIAnalysisSection({
   );
 }
 
-function PotentialSection({ detail, days, setDays }: {
-  detail: GamePotentialDetail | null | undefined;
+function PotentialBreakdownSection({
+  breakdown,
+  days,
+  setDays,
+}: {
+  breakdown: PotentialBreakdown | undefined;
   days: number;
   setDays: (d: number) => void;
 }) {
   const { t, lang } = useUiCopy();
+  const lc = breakdown?.lifecycle;
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold flex items-center gap-2">
+          <Activity className="w-5 h-5 text-primary" /> {t("Phân tích tiềm năng", "Potential Analysis")}
+        </h2>
+        <div className="flex gap-2">
+          {[7, 14, 30].map((d) => (
+            <button
+              key={d}
+              onClick={() => setDays(d)}
+              className={cn(
+                "px-3 py-1 rounded-lg text-xs font-medium transition-colors",
+                days === d ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80",
+              )}
+            >
+              {lang === "vi" ? `${d} ngày` : `${d}d`}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {lc?.transitioned && lc.firstLaunchDate && (
+        <div className="rounded-lg border border-violet-500/30 bg-violet-500/5 px-4 py-3 text-sm">
+          <p className="font-medium text-violet-800 dark:text-violet-200">
+            {t("Reserve → Launch", "Reserve → Launch")}
+          </p>
+          <p className="text-muted-foreground text-xs mt-1">
+            {lc.reserveWindowEnd
+              ? t(
+                  `Chuyển giai đoạn từ ${lc.firstLaunchDate}. Reserve (v6): ${days} ngày trước ngày chuyển. Launch (v8): ${lc.postLaunchDayCount} ngày sau chuyển trong cửa sổ ${days} ngày gần nhất.`,
+                  `Phase change from ${lc.firstLaunchDate}. Reserve (v6): ${days} days before launch. Launch (v8): ${lc.postLaunchDayCount} post-launch days in the latest ${days}d window.`,
+                )
+              : t(
+                  `Chuyển giai đoạn từ ${lc.firstLaunchDate} — trong ${days} ngày: ${lc.preLaunchDayCount} ngày Reserve, ${lc.postLaunchDayCount} ngày Launch`,
+                  `Phase change from ${lc.firstLaunchDate} — in ${days}d window: ${lc.preLaunchDayCount} reserve days, ${lc.postLaunchDayCount} launch days`,
+                )}
+          </p>
+        </div>
+      )}
+
+      <PotentialSection
+        variant="reserve"
+        title={t("Tiềm năng — Reserve (v6)", "Potential — Reserve (v6)")}
+        detail={breakdown?.reserve}
+        lifecycle={lc}
+        emptyHint={t(
+          "Chưa đủ dữ liệu Reserve trong khoảng thời gian này.",
+          "Not enough Reserve chart data in this window.",
+        )}
+      />
+
+      <PotentialSection
+        variant="launched"
+        title={t("Tiềm năng — Launch (v8)", "Potential — Launch (v8)")}
+        detail={breakdown?.launched}
+        emptyHint={t(
+          "Chưa đủ dữ liệu Launch (cần ≥2–3 ngày sau khi lên bảng Hot/Pop/New).",
+          "Not enough Launch data (need ≥2–3 days after appearing on Hot/Pop/New charts).",
+        )}
+      />
+    </div>
+  );
+}
+
+function PotentialSection({
+  variant,
+  title,
+  detail,
+  lifecycle,
+  emptyHint,
+}: {
+  variant: "reserve" | "launched";
+  title: string;
+  detail: GamePotentialDetail | null | undefined;
+  lifecycle?: PotentialBreakdown["lifecycle"];
+  emptyHint: string;
+}) {
+  const { t, lang } = useUiCopy();
+  const isLaunch = variant === "launched";
+  const wMom = isLaunch ? 0.25 : 0.2;
+  const wEng = isLaunch ? 0.55 : 0.6;
+  const wStab = isLaunch ? 0.2 : 0.2;
   const radarData = useMemo(
     () =>
       detail
@@ -606,26 +728,26 @@ function PotentialSection({ detail, days, setDays }: {
 
   return (
     <div className="bg-card rounded-xl border border-border p-5">
-      <div className="flex items-center justify-between mb-5">
-        <h2 className="text-lg font-semibold flex items-center gap-2">
-          <Activity className="w-5 h-5 text-primary" /> {t("Phân tích tiềm năng", "Potential Analysis")}
-        </h2>
-        <div className="flex gap-2">
-          {[7, 14, 30].map((d) => (
-            <button key={d} onClick={() => setDays(d)}
-              className={cn("px-3 py-1 rounded-lg text-xs font-medium transition-colors",
-                days === d ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:bg-muted/80"
-              )}>
-              {lang === "vi" ? `${d} ngày` : `${d}d`}
-            </button>
-          ))}
-        </div>
-      </div>
+      <h3 className="text-base font-semibold mb-4">{title}</h3>
+      {!isLaunch && lifecycle?.reserveWindowEnd && (
+        <p className="text-xs text-muted-foreground mb-4 -mt-2">
+          {t(
+            `${lifecycle.reserveWindowDays ?? 14} ngày Reserve trước ngày chuyển Launch (${lifecycle.reserveWindowEnd}) — không tính ngày sau khi đã ra mắt.`,
+            `${lifecycle.reserveWindowDays ?? 14} reserve days before launch (${lifecycle.reserveWindowEnd}) — post-launch days excluded.`,
+          )}
+        </p>
+      )}
+      {isLaunch && (
+        <p className="text-xs text-muted-foreground mb-4 -mt-2">
+          {t(
+            "Chỉ tính từ ngày xuất hiện trên bảng Hot/Pop/New; ưu tiên hạng Pop > Hot > New.",
+            "Scores only from days on Hot/Pop/New charts; rank priority Pop > Hot > New.",
+          )}
+        </p>
+      )}
 
       {!detail ? (
-        <p className="text-muted-foreground text-sm text-center py-8">
-          {t("Chưa đủ dữ liệu để phân tích tiềm năng (cần tối thiểu 2 ngày).", "Not enough data for potential analysis (minimum 2 days required)")}
-        </p>
+        <p className="text-muted-foreground text-sm text-center py-8">{emptyHint}</p>
       ) : (
         <div className="space-y-5">
           <div className="grid grid-cols-1 md:grid-cols-6 gap-4 items-center">
@@ -655,7 +777,11 @@ function PotentialSection({ detail, days, setDays }: {
               <div className="bg-muted/20 rounded-lg px-3 py-2 text-[10px] text-muted-foreground space-y-1">
                 <p>
                   <span className="font-medium text-foreground">{t("Thô", "Raw")}</span>{" "}
-                  = {momL}×0.2 + {engL}×0.6 + {stabL}×0.2
+                  = {momL}×{wMom} + {engL}×{wEng} + {stabL}×{wStab}
+                  {isLaunch && detail.preLaunchBonus != null && detail.preLaunchBonus > 0
+                    ? t(` + bonus Reserve trước launch (+${detail.preLaunchBonus})`, ` + pre-launch reserve bonus (+${detail.preLaunchBonus})`)
+                    : ""}
+                  {isLaunch ? t(" (+5 nếu ≥2 board Launch)", " (+5 if on ≥2 launch boards)") : ""}
                 </p>
                 <p>
                   <span className="font-medium text-foreground">{t("Cuối", "Final")}</span>{" "}
@@ -675,7 +801,7 @@ function PotentialSection({ detail, days, setDays }: {
             {m && <FactorCard
               icon={<TrendingUp className="w-4 h-4" />}
               label={momL}
-              weight="20%"
+              weight={`${wMom * 100}%`}
               score={m.score}
               description={t(
                 "Vị trí xếp hạng hiện tại + biến động xếp hạng + đỉnh cao giai đoạn.",
@@ -722,12 +848,19 @@ function PotentialSection({ detail, days, setDays }: {
             {e && <FactorCard
               icon={<Activity className="w-4 h-4" />}
               label={engL}
-              weight="60%"
+              weight={`${wEng * 100}%`}
               score={e.score}
-              description={t(
-                "Người chơi có đang quan tâm nhiều hơn? Gồm chất lượng sao, tăng fan và tăng đăng ký trước — trọng số cao nhất.",
-                "Are users increasingly interested? Measures rating quality, fan growth, and reserve growth. The most important factor.",
-              )}
+              description={
+                isLaunch
+                  ? t(
+                      "Rating, tăng fan và tăng download (không dùng reserve).",
+                      "Rating, fan growth, and download growth (reserve excluded).",
+                    )
+                  : t(
+                      "Người chơi có đang quan tâm nhiều hơn? Gồm chất lượng sao, tăng fan và tăng đăng ký trước — trọng số cao nhất.",
+                      "Are users increasingly interested? Measures rating quality, fan growth, and reserve growth. The most important factor.",
+                    )
+              }
               rows={[
                 ...(e.ratingScore != null ? [{
                   label: t("Điểm sao", "Rating"),
@@ -749,16 +882,34 @@ function PotentialSection({ detail, days, setDays }: {
                   ],
                   note: t(`Ngưỡng theo chu kỳ (${formatNumber(e.absThreshold)} cho giai đoạn này)`, `Threshold scales with period (${formatNumber(e.absThreshold)} for this period)`),
                 }] : [{ label: t("Tăng fan", "Fans Growth"), value: t("Không có (cần ≥ 100 fan ban đầu)", "N/A (need ≥ 100 start)") }]),
-                ...(e.resScore != null ? [{
-                  label: t("Tăng đăng ký trước", "Reserve Growth"),
-                  value: `${formatNumber(e.resStart!)} → ${formatNumber(e.resEnd!)} (+${formatNumber(e.resGrowth)})`,
-                  details: [
-                    t(`Theo %: ${e.resRate ?? 0}% × 2 = ${e.resRateScore ?? "–"} pts`, `By rate: ${e.resRate ?? 0}% × 2 = ${e.resRateScore ?? "–"} pts`),
-                    t(`Theo khối lượng: +${formatNumber(e.resGrowth)} / ${formatNumber(e.absThreshold)} = ${e.resAbsScore ?? "–"} pts`, `By volume: +${formatNumber(e.resGrowth)} / ${formatNumber(e.absThreshold)} = ${e.resAbsScore ?? "–"} pts`),
-                    t(`Lấy tốt hơn trong hai = ${e.resScore} pts`, `Best of the two = ${e.resScore} pts`),
-                  ],
-                  note: t("Lấy tốt hơn giữa tăng % và tăng tuyệt đối", "Best of % growth or absolute volume"),
-                }] : [{ label: t("Tăng đăng ký trước", "Reserve Growth"), value: t("Không có (cần ≥ 50 đăng ký ban đầu)", "N/A (need ≥ 50 start)") }]),
+                ...(!isLaunch
+                  ? e.resScore != null
+                    ? [{
+                        label: t("Tăng đăng ký trước", "Reserve Growth"),
+                        value: `${formatNumber(e.resStart!)} → ${formatNumber(e.resEnd!)} (+${formatNumber(e.resGrowth)})`,
+                        details: [
+                          t(`Theo %: ${e.resRate ?? 0}% × 2 = ${e.resRateScore ?? "–"} pts`, `By rate: ${e.resRate ?? 0}% × 2 = ${e.resRateScore ?? "–"} pts`),
+                          t(`Theo khối lượng: +${formatNumber(e.resGrowth)} / ${formatNumber(e.absThreshold)} = ${e.resAbsScore ?? "–"} pts`, `By volume: +${formatNumber(e.resGrowth)} / ${formatNumber(e.absThreshold)} = ${e.resAbsScore ?? "–"} pts`),
+                          t(`Lấy tốt hơn trong hai = ${e.resScore} pts`, `Best of the two = ${e.resScore} pts`),
+                        ],
+                        note: t("Lấy tốt hơn giữa tăng % và tăng tuyệt đối", "Best of % growth or absolute volume"),
+                      }]
+                    : [{ label: t("Tăng đăng ký trước", "Reserve Growth"), value: t("Không có (cần ≥ 50 đăng ký ban đầu)", "N/A (need ≥ 50 start)") }]
+                  : []),
+                ...(isLaunch && e.dlScore != null
+                  ? [{
+                      label: t("Tăng download", "Download Growth"),
+                      value: `${formatNumber(e.dlStart!)} → ${formatNumber(e.dlEnd!)} (+${formatNumber(e.dlGrowth ?? 0)})`,
+                      details: [
+                        t(`Theo %: ${e.dlRate ?? 0}% × 2 = ${e.dlRateScore ?? "–"} pts`, `By rate: ${e.dlRate ?? 0}% × 2 = ${e.dlRateScore ?? "–"} pts`),
+                        t(`Theo khối lượng: +${formatNumber(e.dlGrowth ?? 0)} / ${formatNumber(e.absThreshold)} = ${e.dlAbsScore ?? "–"} pts`, `By volume: +${formatNumber(e.dlGrowth ?? 0)} / ${formatNumber(e.absThreshold)} = ${e.dlAbsScore ?? "–"} pts`),
+                        t(`Lấy tốt hơn trong hai = ${e.dlScore} pts`, `Best of the two = ${e.dlScore} pts`),
+                      ],
+                      note: t("Nguồn: stat.hits_total từ TapTap", "Source: TapTap stat.hits_total"),
+                    }]
+                  : isLaunch
+                    ? [{ label: t("Tăng download", "Download Growth"), value: t("Không đủ dữ liệu", "N/A") }]
+                    : []),
                 {
                   label: t("Tổng", "Total"),
                   value: t(
@@ -772,7 +923,7 @@ function PotentialSection({ detail, days, setDays }: {
             {st && <FactorCard
               icon={<Shield className="w-4 h-4" />}
               label={stabL}
-              weight="20%"
+              weight={`${wStab * 100}%`}
               score={st.score}
               description={t(
                 "Game có ổn định trong bảng xếp hạng không? Thưởng số ngày có mặt và độ dao động hạng thấp.",

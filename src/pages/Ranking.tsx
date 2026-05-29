@@ -1,14 +1,19 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
-import { Search, ChevronLeft, ChevronRight, ArrowUpDown, Star, Users } from "lucide-react";
+import { Search, ChevronLeft, ChevronRight, ArrowUpDown, Star, Users, Bookmark, Rocket } from "lucide-react";
 import { fetchRankings, fetchDates, fetchTags } from "@/services/api";
+import type { GameListItem } from "@/types";
+import { LaunchBoardTags } from "@/components/LaunchBoardTags";
 import { cn, formatNumber } from "@/lib/utils";
 import { useUiCopy } from "@/lib/use-ui-copy";
+
+type RankingSegment = "reserve" | "launched";
 
 export default function Ranking() {
   const navigate = useNavigate();
   const { t } = useUiCopy();
+  const [segment, setSegment] = useState<RankingSegment>("reserve");
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
   const [selectedDate, setSelectedDate] = useState("");
@@ -22,21 +27,27 @@ export default function Ranking() {
   const { data: tags } = useQuery({ queryKey: ["tags"], queryFn: () => fetchTags() });
 
   const { data: rankings, isLoading } = useQuery({
-    queryKey: ["rankings", page, search, selectedDate, selectedTag, platform, sort, order],
+    queryKey: ["rankings", segment, page, search, selectedDate, selectedTag, platform, sort, order],
     queryFn: () =>
       fetchRankings({
-        page, limit,
+        page,
+        limit,
         search: search || undefined,
         date: selectedDate || undefined,
         tag: selectedTag || undefined,
         platform,
-        sort, order,
+        sort,
+        order,
+        segment,
       }),
   });
 
   function handleSort(field: string) {
     if (sort === field) setOrder(order === "asc" ? "desc" : "asc");
-    else { setSort(field); setOrder("asc"); }
+    else {
+      setSort(field);
+      setOrder("asc");
+    }
     setPage(1);
   }
 
@@ -54,10 +65,20 @@ export default function Ranking() {
     );
   }
 
+  const tableTitle =
+    segment === "reserve"
+      ? t("Bảng đăng ký trước (Reserve)", "Pre-registration (Reserve)")
+      : t("Game đã ra mắt (Launch)", "Launched games");
+
+  const tableSubtitle =
+    segment === "reserve"
+      ? t("Snapshot bảng Reserve theo ngày", "Reserve chart snapshot by date")
+      : t("Ưu tiên hạng: Pop > Hot > New", "Rank priority: Pop > Hot > New");
+
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold">{t("Bảng xếp hạng Top 200", "Top 200 Ranking")}</h1>
+        <h1 className="text-2xl font-bold">{t("Bảng xếp hạng", "Top Ranking")}</h1>
         <p className="text-muted-foreground text-sm mt-1">
           {t("Bảng xếp hạng game TapTap theo ngày", "TapTap daily game rankings")}
           {rankings?.date && ` — ${rankings.date}`}
@@ -71,19 +92,44 @@ export default function Ranking() {
             type="text"
             placeholder={t("Tìm game…", "Search games...")}
             value={search}
-            onChange={(e) => { setSearch(e.target.value); setPage(1); }}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
             className="w-full pl-10 pr-4 py-2 rounded-lg border border-border bg-card text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
           />
+        </div>
+
+        <div className="flex rounded-lg border border-border overflow-hidden">
+          {(["reserve", "launched"] as const).map((s) => (
+            <button
+              key={s}
+              onClick={() => {
+                setSegment(s);
+                setPage(1);
+              }}
+              className={cn(
+                "px-4 py-2 text-sm font-medium transition-colors flex items-center gap-1.5",
+                segment === s ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:bg-muted",
+              )}
+            >
+              {s === "reserve" ? <Bookmark className="w-4 h-4" /> : <Rocket className="w-4 h-4" />}
+              {s === "reserve" ? "Reserve" : "Launch"}
+            </button>
+          ))}
         </div>
 
         <div className="flex rounded-lg border border-border overflow-hidden">
           {(["combined", "android", "ios"] as const).map((p) => (
             <button
               key={p}
-              onClick={() => { setPlatform(p); setPage(1); }}
+              onClick={() => {
+                setPlatform(p);
+                setPage(1);
+              }}
               className={cn(
                 "px-4 py-2 text-sm font-medium transition-colors",
-                platform === p ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:bg-muted"
+                platform === p ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:bg-muted",
               )}
             >
               {p === "combined" ? t("Tất cả", "All") : p === "android" ? "Android" : "iOS"}
@@ -93,26 +139,43 @@ export default function Ranking() {
 
         <select
           value={selectedDate}
-          onChange={(e) => { setSelectedDate(e.target.value); setPage(1); }}
+          onChange={(e) => {
+            setSelectedDate(e.target.value);
+            setPage(1);
+          }}
           className="px-3 py-2 rounded-lg border border-border bg-card text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
         >
           <option value="">{t("Ngày mới nhất", "Latest Date")}</option>
-          {dates?.map((d) => <option key={d} value={d}>{d}</option>)}
+          {dates?.map((d) => (
+            <option key={d} value={d}>
+              {d}
+            </option>
+          ))}
         </select>
 
         <select
           value={selectedTag}
-          onChange={(e) => { setSelectedTag(e.target.value); setPage(1); }}
+          onChange={(e) => {
+            setSelectedTag(e.target.value);
+            setPage(1);
+          }}
           className="px-3 py-2 rounded-lg border border-border bg-card text-sm focus:outline-none focus:ring-2 focus:ring-primary/50"
         >
           <option value="">{t("Tất cả thẻ", "All Tags")}</option>
-          {tags?.slice(0, 30).map((t) => (
-            <option key={t.name} value={t.name}>{t.name} ({t.count})</option>
+          {tags?.slice(0, 30).map((tag) => (
+            <option key={tag.name} value={tag.name}>
+              {tag.name} ({tag.count})
+            </option>
           ))}
         </select>
       </div>
 
       <div className="bg-card rounded-xl border border-border overflow-hidden">
+        <div className="px-5 py-4 border-b border-border">
+          <h2 className="font-semibold">{tableTitle}</h2>
+          <p className="text-xs text-muted-foreground mt-1">{tableSubtitle}</p>
+        </div>
+
         {isLoading ? (
           <div className="flex items-center justify-center h-64">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary" />
@@ -124,27 +187,65 @@ export default function Ranking() {
                 <thead className="bg-muted/50">
                   <tr>
                     <SortHeader field="rank" label={t("Hạng", "Rank")} />
-                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">{t("Game", "Game")}</th>
-                    {platform === "combined" && (
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                      {t("Game", "Game")}
+                    </th>
+                    {segment === "launched" && (
                       <>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Android</th>
-                        <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">iOS</th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                          {t("Tag BXH", "Chart tags")}
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                          {t("Loại", "Type")}
+                        </th>
                       </>
                     )}
-                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">{t("Thẻ", "Tags")}</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">{t("Đánh giá", "Rating")}</th>
+                    {platform === "combined" && (
+                      <>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                          Android
+                        </th>
+                        <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                          iOS
+                        </th>
+                      </>
+                    )}
                     <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
-                      <div className="flex items-center gap-1"><Users className="w-3 h-3" />{t("Fan", "Fans")}</div>
+                      {t("Ra mắt", "Release")}
                     </th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">{t("Đăng ký trước", "Reserves")}</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">{t("Bình luận", "Reviews")}</th>
+                    {segment === "launched" && (
+                      <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                        {t("Download", "Downloads")}
+                      </th>
+                    )}
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                      {t("Thẻ", "Tags")}
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                      {t("Đánh giá", "Rating")}
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                      <div className="flex items-center gap-1">
+                        <Users className="w-3 h-3" />
+                        {t("Fan", "Fans")}
+                      </div>
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                      {t("Đăng ký trước", "Reserves")}
+                    </th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                      {t("Bình luận", "Reviews")}
+                    </th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border">
                   {rankings?.data.map((item, idx) => {
-                    const rank = platform === "combined"
-                      ? (rankings.page - 1) * rankings.limit + idx + 1
-                      : platform === "android" ? item.androidRank : item.iosRank;
+                    const rank =
+                      platform === "combined"
+                        ? (rankings.page - 1) * rankings.limit + idx + 1
+                        : platform === "android"
+                          ? item.androidRank
+                          : item.iosRank;
                     return (
                       <tr
                         key={item.appId}
@@ -152,12 +253,16 @@ export default function Ranking() {
                         onClick={() => navigate(`/game/${item.appId}`)}
                       >
                         <td className="px-4 py-3">
-                          <span className={cn(
-                            "inline-flex items-center justify-center w-8 h-8 rounded-full text-sm font-bold",
-                            rank != null && rank <= 3 ? "bg-primary text-primary-foreground"
-                              : rank != null && rank <= 10 ? "bg-accent text-accent-foreground"
-                                : "bg-muted text-muted-foreground"
-                          )}>
+                          <span
+                            className={cn(
+                              "inline-flex items-center justify-center w-8 h-8 rounded-full text-sm font-bold",
+                              rank != null && rank <= 3
+                                ? "bg-primary text-primary-foreground"
+                                : rank != null && rank <= 10
+                                  ? "bg-accent text-accent-foreground"
+                                  : "bg-muted text-muted-foreground",
+                            )}
+                          >
                             {rank ?? "-"}
                           </span>
                         </td>
@@ -172,10 +277,22 @@ export default function Ranking() {
                             )}
                             <div>
                               <p className="font-medium text-sm">{item.title}</p>
-                              <p className="text-xs text-muted-foreground">{t("Mã", "ID")}: {item.appId}</p>
+                              <p className="text-xs text-muted-foreground">
+                                {t("Mã", "ID")}: {item.appId}
+                              </p>
                             </div>
                           </div>
                         </td>
+                        {segment === "launched" && (
+                          <>
+                            <td className="px-4 py-3">
+                              <LaunchBoardTags tags={item.launchBoardTags} />
+                            </td>
+                            <td className="px-4 py-3">
+                              <LaunchTypeBadge category={item.launchCategory} t={t} />
+                            </td>
+                          </>
+                        )}
                         {platform === "combined" && (
                           <>
                             <td className="px-4 py-3 text-sm text-muted-foreground">
@@ -186,10 +303,21 @@ export default function Ranking() {
                             </td>
                           </>
                         )}
+                        <td className="px-4 py-3 text-sm text-muted-foreground whitespace-nowrap">
+                          {item.releaseDate ?? "—"}
+                        </td>
+                        {segment === "launched" && (
+                          <td className="px-4 py-3 text-sm text-muted-foreground">
+                            {item.downloadCount != null ? formatNumber(item.downloadCount) : "—"}
+                          </td>
+                        )}
                         <td className="px-4 py-3">
                           <div className="flex flex-wrap gap-1">
                             {item.tags.slice(0, 2).map((tag) => (
-                              <span key={tag} className="inline-flex px-2 py-0.5 rounded-full bg-accent text-accent-foreground text-xs">
+                              <span
+                                key={tag}
+                                className="inline-flex px-2 py-0.5 rounded-full bg-accent text-accent-foreground text-xs"
+                              >
                                 {tag}
                               </span>
                             ))}
@@ -228,13 +356,21 @@ export default function Ranking() {
                   )}
                 </p>
                 <div className="flex items-center gap-2">
-                  <button disabled={page === 1} onClick={() => setPage(page - 1)}
-                    className="p-2 rounded-lg border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                  <button
+                    disabled={page === 1}
+                    onClick={() => setPage(page - 1)}
+                    className="p-2 rounded-lg border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
                     <ChevronLeft className="w-4 h-4" />
                   </button>
-                  <span className="text-sm font-medium px-2">{page} / {rankings.totalPages}</span>
-                  <button disabled={page === rankings.totalPages} onClick={() => setPage(page + 1)}
-                    className="p-2 rounded-lg border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+                  <span className="text-sm font-medium px-2">
+                    {page} / {rankings.totalPages}
+                  </span>
+                  <button
+                    disabled={page === rankings.totalPages}
+                    onClick={() => setPage(page + 1)}
+                    className="p-2 rounded-lg border border-border hover:bg-muted disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                  >
                     <ChevronRight className="w-4 h-4" />
                   </button>
                 </div>
@@ -245,4 +381,28 @@ export default function Ranking() {
       </div>
     </div>
   );
+}
+
+function LaunchTypeBadge({
+  category,
+  t,
+}: {
+  category?: GameListItem["launchCategory"];
+  t: (vi: string, en: string) => string;
+}) {
+  if (category === "new_launch") {
+    return (
+      <span className="text-xs font-semibold px-2 py-0.5 rounded bg-violet-500/15 text-violet-700 dark:text-violet-300">
+        {t("Mới", "New")}
+      </span>
+    );
+  }
+  if (category === "established_launch") {
+    return (
+      <span className="text-xs font-semibold px-2 py-0.5 rounded bg-sky-500/15 text-sky-800 dark:text-sky-300">
+        {t("Đã ra mắt", "Launched")}
+      </span>
+    );
+  }
+  return <span className="text-xs text-muted-foreground">—</span>;
 }
