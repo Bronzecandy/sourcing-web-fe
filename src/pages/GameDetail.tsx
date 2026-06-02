@@ -20,6 +20,8 @@ import HistoryRangePicker from "@/components/HistoryRangePicker";
 import type { HistoryRange } from "@/types/history-range";
 import AnalysisDetailModal from "@/components/AnalysisDetailModal";
 import AnalysisSourceBadge from "@/components/AnalysisSourceBadge";
+import StoreLinkChips from "@/components/StoreLinkChips";
+import { analysisStoreLinks, gameStoreLinks } from "@/lib/store-links";
 import { DEFAULT_REVIEW_WINDOW, type ReviewWindow } from "@/types/review-window";
 import { buildFanReserveDeltaSeries, formatDelta } from "@/lib/chart-delta";
 import { useUiCopy, potentialRadarMetric } from "@/lib/use-ui-copy";
@@ -164,6 +166,7 @@ export default function GameDetail() {
           )}
           <div className="flex-1">
             <h1 className="text-2xl font-bold">{game.title}</h1>
+            <StoreLinkChips links={gameStoreLinks(game.appId)} className="mt-2" />
             {game.developerName && (
               <p className="text-sm text-muted-foreground mt-1">
                 <span className="font-medium text-foreground">{t("Nhà phát triển:", "Developer:")}</span>{" "}
@@ -552,6 +555,7 @@ function AIAnalysisSection({
                       </span>
                       <AnalysisSourceBadge source={h.source} size="sm" />
                     </div>
+                    <StoreLinkChips links={analysisStoreLinks(h)} size="xs" className="mt-1" stopPropagation={false} />
                     {h.dateRangeStart && h.dateRangeEnd && (
                       <span className="text-muted-foreground">{h.dateRangeStart} — {h.dateRangeEnd}</span>
                     )}
@@ -598,6 +602,7 @@ function AIAnalysisSection({
                     {overview.developerName}
                   </p>
                 )}
+                <StoreLinkChips links={analysisStoreLinks(overview)} size="xs" className="mb-2" stopPropagation={false} />
                 <p className="text-xs text-muted-foreground">
                   {overview.reviewsAnalyzed} {t("bình luận", "reviews")}
                   {overview.dateRangeStart && overview.dateRangeEnd && (

@@ -9,6 +9,8 @@ import { TrendingUp, Zap, ArrowUp, Bookmark, ChevronUp, ChevronDown, ArrowUpDown
 import { fetchPotentialScores, fetchBreakoutGames, fetchReserveGrowth } from "@/services/api";
 import type { PotentialScore, PotentialSegment } from "@/types";
 import { LaunchBoardTags } from "@/components/LaunchBoardTags";
+import StoreLinkChips from "@/components/StoreLinkChips";
+import { gameStoreLinks } from "@/lib/store-links";
 import { cn, getScoreColor, getTrendIcon, formatNumber } from "@/lib/utils";
 import { useUiCopy, potentialRadarMetric } from "@/lib/use-ui-copy";
 
@@ -247,6 +249,7 @@ export default function Potential() {
                       <p className="text-xs text-muted-foreground">
                         #{g.startRank} → #{g.currentRank}
                       </p>
+                      <StoreLinkChips links={gameStoreLinks(g.appId)} size="xs" className="mt-1" />
                     </div>
                     <div className="flex items-center gap-1 text-up text-sm font-bold shrink-0">
                       <ArrowUp className="w-3 h-3" /> +{g.improvement}
@@ -320,7 +323,10 @@ export default function Potential() {
                             {g.title.charAt(0)}
                           </div>
                         )}
-                        <span className="text-sm font-medium max-w-[160px] truncate">{g.title}</span>
+                        <div className="min-w-0">
+                          <span className="text-sm font-medium max-w-[160px] truncate block">{g.title}</span>
+                          <StoreLinkChips links={gameStoreLinks(g.appId)} size="xs" className="mt-0.5" />
+                        </div>
                       </div>
                     </td>
                     <td className="px-4 py-3 text-sm text-muted-foreground">#{g.currentRank ?? t("Không có", "N/A")}</td>
@@ -455,7 +461,10 @@ function PotentialRankingTable({
                           {s.title.charAt(0)}
                         </div>
                       )}
-                      <span className="text-sm font-medium max-w-[140px] truncate">{s.title}</span>
+                      <div className="min-w-0">
+                        <span className="text-sm font-medium max-w-[140px] truncate block">{s.title}</span>
+                        <StoreLinkChips links={gameStoreLinks(s.appId)} size="xs" className="mt-0.5" />
+                      </div>
                     </div>
                   </td>
                   {segment === "launched" && (

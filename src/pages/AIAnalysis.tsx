@@ -11,6 +11,8 @@ import AnalysisProgressPanel, {
 import type { AnalysisProgressUpdate } from "@/lib/analysis-stream";
 import AnalysisDetailModal from "@/components/AnalysisDetailModal";
 import AnalysisSourceBadge from "@/components/AnalysisSourceBadge";
+import StoreLinkChips from "@/components/StoreLinkChips";
+import { analysisStoreLinks } from "@/lib/store-links";
 import { Brain, Search, Sparkles, ExternalLink, Trash2, Globe, Upload, FileSpreadsheet, X } from "lucide-react";
 import { triggerExternalAnalysis, triggerCsvAnalysis, deleteAnalysis, fetchAllAnalyses } from "@/services/api";
 import { cn, getScoreColor } from "@/lib/utils";
@@ -249,6 +251,7 @@ export default function AIAnalysisPage() {
                     {a.developerName && (
                       <p className="text-[10px] text-muted-foreground truncate">{a.developerName}</p>
                     )}
+                    <StoreLinkChips links={analysisStoreLinks(a)} size="xs" />
                     <p className="text-[10px] text-muted-foreground flex flex-wrap items-center gap-x-1 gap-y-0.5">
                       {a.analyzedAt && (
                         <span className="tabular-nums">{new Date(a.analyzedAt).toLocaleString()}</span>

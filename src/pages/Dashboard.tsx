@@ -10,6 +10,8 @@ import { fetchDashboard } from "@/services/api";
 import { formatDate, formatNumber } from "@/lib/utils";
 import { useNavigate } from "react-router-dom";
 import { useUiCopy } from "@/lib/use-ui-copy";
+import StoreLinkChips from "@/components/StoreLinkChips";
+import { gameStoreLinks } from "@/lib/store-links";
 
 const PIE_COLORS = [
   "#6366f1", "#8b5cf6", "#a78bfa", "#c4b5fd", "#818cf8",
@@ -112,7 +114,10 @@ export default function Dashboard() {
                         {m.name.charAt(0)}
                       </div>
                     )}
-                    <span className="text-sm font-medium w-[110px] truncate shrink-0">{m.name}</span>
+                    <div className="w-[110px] shrink-0 min-w-0">
+                      <span className="text-sm font-medium truncate block">{m.name}</span>
+                      <StoreLinkChips links={gameStoreLinks(m.appId)} size="xs" className="mt-0.5" />
+                    </div>
                     <div className="flex-1 h-5 relative flex items-center">
                       <div
                         className={`h-full rounded ${isGain ? "bg-up/80" : "bg-down/80"}`}
@@ -184,9 +189,12 @@ export default function Dashboard() {
                       {g.title.charAt(0)}
                     </div>
                   )}
-                  <span className="font-medium text-sm">{g.title}</span>
+                  <div className="min-w-0">
+                    <span className="font-medium text-sm block truncate">{g.title}</span>
+                    <StoreLinkChips links={gameStoreLinks(g.appId)} size="xs" className="mt-0.5" />
+                  </div>
                 </div>
-                <span className="text-up font-semibold text-sm">+{g.change}</span>
+                <span className="text-up font-semibold text-sm shrink-0">+{g.change}</span>
               </div>
             ))}
             {stats.topMovers.gainers.length === 0 && (
@@ -215,9 +223,12 @@ export default function Dashboard() {
                       {l.title.charAt(0)}
                     </div>
                   )}
-                  <span className="font-medium text-sm">{l.title}</span>
+                  <div className="min-w-0">
+                    <span className="font-medium text-sm block truncate">{l.title}</span>
+                    <StoreLinkChips links={gameStoreLinks(l.appId)} size="xs" className="mt-0.5" />
+                  </div>
                 </div>
-                <span className="text-down font-semibold text-sm">{l.change}</span>
+                <span className="text-down font-semibold text-sm shrink-0">{l.change}</span>
               </div>
             ))}
             {stats.topMovers.losers.length === 0 && (

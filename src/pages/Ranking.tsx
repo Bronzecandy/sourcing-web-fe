@@ -5,6 +5,8 @@ import { Search, ChevronLeft, ChevronRight, ArrowUpDown, Star, Users, Bookmark, 
 import { fetchRankings, fetchDates, fetchTags } from "@/services/api";
 import type { GameListItem } from "@/types";
 import { LaunchBoardTags } from "@/components/LaunchBoardTags";
+import StoreLinkChips from "@/components/StoreLinkChips";
+import { gameStoreLinks } from "@/lib/store-links";
 import { cn, formatNumber } from "@/lib/utils";
 import { useUiCopy } from "@/lib/use-ui-copy";
 
@@ -280,6 +282,7 @@ export default function Ranking() {
                               <p className="text-xs text-muted-foreground">
                                 {t("Mã", "ID")}: {item.appId}
                               </p>
+                              <StoreLinkChips links={gameStoreLinks(item.appId)} size="xs" className="mt-1" />
                             </div>
                           </div>
                         </td>

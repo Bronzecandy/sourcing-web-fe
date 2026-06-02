@@ -11,6 +11,8 @@ import { AnalysisBulletBlock } from "@/components/AnalysisBulletBlock";
 import RubricPanel from "@/components/RubricPanel";
 import RedFlagSection from "@/components/RedFlagSection";
 import AnalysisSourceBadge from "@/components/AnalysisSourceBadge";
+import StoreLinkChips from "@/components/StoreLinkChips";
+import { analysisStoreLinks } from "@/lib/store-links";
 import { useUiCopy, bucketDisplayName } from "@/lib/use-ui-copy";
 import { cn, getScoreColor } from "@/lib/utils";
 
@@ -53,6 +55,7 @@ export default function AnalysisDetailContent({
             </h3>
             <AnalysisSourceBadge source={analysis.source} className="shrink-0" />
           </div>
+          <StoreLinkChips links={analysisStoreLinks(analysis)} size="sm" className="mt-2" stopPropagation={false} />
           {analysis.developerName && (
             <p className="text-sm text-muted-foreground mt-0.5">
               <span className="font-medium text-foreground">{t("Nhà phát triển:", "Developer:")}</span>{" "}
