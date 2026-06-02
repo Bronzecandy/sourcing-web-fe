@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Library, RefreshCw, Save, Wand2, BookOpen, Loader2, Code2 } from "lucide-react";
+import { Library, RefreshCw, Save, Wand2, Code2, Loader2, ChevronDown, Plus } from "lucide-react";
 import {
   fetchLibraryFileList,
   fetchLibraryJson,
@@ -8,35 +8,67 @@ import {
   fetchLibraryPending,
   mergeLibraryPending,
   deleteLibraryPending,
-  appendLibraryStudio,
 } from "@/services/api";
 import { cn } from "@/lib/utils";
 import { useUiCopy } from "@/lib/use-ui-copy";
+import { useAuth } from "@/contexts/AuthContext";
+import { hasPermission } from "@/lib/permissions";
+import { libraryFileLabel } from "@/lib/library-labels";
 import type { LibraryPendingItem } from "@/types";
 import LibraryTableEditor, { PendingMergeTable } from "@/components/library-editors/LibraryTableEditor";
 import { tierScoreMap } from "@/lib/library-json";
+import PageHeader from "@/components/ui/PageHeader";
+import Tabs from "@/components/ui/Tabs";
+import { useToast } from "@/components/ui/Toast";
+import LibraryAddEntryModal from "@/components/libraries/LibraryAddEntryModal";
+import Modal, { ModalFooterActions } from "@/components/ui/Modal";
+import { btnGhost, btnPrimary } from "@/lib/button-classes";
+
+const DOCUMENT_SLUGS = [
+  "genre-tiers.json",
+  "studio-tiers.json",
+  "game-size-tiers.json",
+  "update-cycle-tiers.json",
+  "community-size-tiers.json",
+  "ip-theme-tiers.json",
+  "system-requirement-tiers.json",
+  "art-style-keywords.json",
+];
+
+type ConfirmState =
+  | { kind: "merge"; id: string; body: Parameters<typeof mergeLibraryPending>[1] }
+  | { kind: "delete"; id: string }
+  | null;
 
 export default function LibrariesPage() {
   const { t, lang } = useUiCopy();
+  const toast = useToast();
+  const { user } = useAuth();
+  const canWrite = hasPermission(user, "libraries.write");
   const queryClient = useQueryClient();
+
+  const [mainTab, setMainTab] = useState<"documents" | "pending">("documents");
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [libraryData, setLibraryData] = useState<unknown | null>(null);
   const [dirty, setDirty] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
   const [jsonRawOpen, setJsonRawOpen] = useState(false);
   const [jsonRaw, setJsonRaw] = useState("");
-  /** Remount bảng chỉnh sửa khi load file / áp JSON — tránh lệch state cục bộ (genre từng dòng). */
   const [editorMountKey, setEditorMountKey] = useState(0);
-
-  const [studioNames, setStudioNames] = useState("");
-  const [studioScore, setStudioScore] = useState("55");
-  const [studioTier, setStudioTier] = useState("");
+  const [pendingTypeFilter, setPendingTypeFilter] = useState<string>("all");
+  const [addModalOpen, setAddModalOpen] = useState(false);
+  const [confirm, setConfirm] = useState<ConfirmState>(null);
 
   const { data: fileIds = [], isPending: filesLoading } = useQuery({
     queryKey: ["library-files"],
     queryFn: fetchLibraryFileList,
     staleTime: 60_000,
   });
+
+  const documentFiles = useMemo(
+    () => fileIds.filter((id) => id !== "pending-additions.json" && DOCUMENT_SLUGS.includes(id)),
+    [fileIds],
+  );
 
   const pendingQuery = useQuery({
     queryKey: ["library-pending"],
@@ -51,6 +83,11 @@ export default function LibrariesPage() {
   });
 
   const tierMap = useMemo(() => tierScoreMap(genreTiersQuery.data), [genreTiersQuery.data]);
+  const genreTierKeys = useMemo(() => {
+    const g = genreTiersQuery.data as { tiers?: Record<string, unknown> } | undefined;
+    const keys = g?.tiers ? Object.keys(g.tiers).sort() : [];
+    return keys.length ? keys : ["S", "A", "B", "C"];
+  }, [genreTiersQuery.data]);
 
   const loadSelectedFile = useCallback(async (id: string) => {
     const json = await fetchLibraryJson(id);
@@ -63,7 +100,7 @@ export default function LibrariesPage() {
   }, []);
 
   useEffect(() => {
-    if (!selectedId) return;
+    if (!selectedId || mainTab !== "documents") return;
     let cancelled = false;
     loadSelectedFile(selectedId).catch((e) => {
       if (!cancelled) setParseError(String(e));
@@ -71,13 +108,23 @@ export default function LibrariesPage() {
     return () => {
       cancelled = true;
     };
-  }, [selectedId, loadSelectedFile]);
+  }, [selectedId, loadSelectedFile, mainTab]);
 
-  const handleLibraryChange = useCallback((next: unknown) => {
-    setLibraryData(next);
-    setDirty(true);
-    setParseError(null);
-  }, []);
+  useEffect(() => {
+    if (!selectedId && documentFiles.length > 0 && mainTab === "documents") {
+      setSelectedId(documentFiles[0]!);
+    }
+  }, [documentFiles, selectedId, mainTab]);
+
+  const handleLibraryChange = useCallback(
+    (next: unknown) => {
+      if (!canWrite) return;
+      setLibraryData(next);
+      setDirty(true);
+      setParseError(null);
+    },
+    [canWrite],
+  );
 
   const selectFile = (id: string) => {
     if (id === selectedId) return;
@@ -98,65 +145,45 @@ export default function LibrariesPage() {
     onSuccess: () => {
       setDirty(false);
       setParseError(null);
-      queryClient.invalidateQueries({ queryKey: ["library-file-meta", selectedId] });
+      toast.success(t("Đã lưu thay đổi chỉnh sửa", "Edits saved"));
       queryClient.invalidateQueries({ queryKey: ["library-json", selectedId] });
       if (selectedId === "genre-tiers.json") {
         queryClient.invalidateQueries({ queryKey: ["library-json", "genre-tiers.json"] });
       }
     },
-    onError: (e: Error) => setParseError(e.message),
+    onError: (e: Error) => {
+      setParseError(e.message);
+      toast.error(e.message);
+    },
   });
 
   const mergeMutation = useMutation({
     mutationFn: (args: {
       id: string;
-      body: {
-        score?: number;
-        tier?: string;
-        keywordsEn?: string;
-        maxMb?: number;
-        maxDaysSinceUpdate?: number;
-        minFans?: number;
-      };
+      body: Parameters<typeof mergeLibraryPending>[1];
     }) => mergeLibraryPending(args.id, args.body),
     onSuccess: () => {
       setParseError(null);
+      setConfirm(null);
+      toast.success(t("Đã merge vào thư viện", "Merged into library"));
       queryClient.invalidateQueries({ queryKey: ["library-pending"] });
       queryClient.invalidateQueries({ queryKey: ["library-json"] });
-      queryClient.invalidateQueries({ queryKey: ["library-files"] });
+      if (selectedId) loadSelectedFile(selectedId).catch(() => undefined);
     },
-    onError: (e: Error) => setParseError(e.message),
+    onError: (e: Error) => {
+      setParseError(e.message);
+      toast.error(e.message);
+    },
   });
 
   const deleteMutation = useMutation({
     mutationFn: deleteLibraryPending,
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["library-pending"] }),
-  });
-
-  const studioMutation = useMutation({
-    mutationFn: () => {
-      const names = studioNames
-        .split(",")
-        .map((s) => s.trim())
-        .filter(Boolean);
-      const score = parseFloat(studioScore);
-      if (names.length === 0 || !Number.isFinite(score)) {
-        throw new Error(t("Cần ít nhất một tên studio và điểm hợp lệ", "Enter at least one studio name and a valid score"));
-      }
-      return appendLibraryStudio({
-        names,
-        score,
-        tier: studioTier.trim() || undefined,
-      });
-    },
     onSuccess: () => {
-      setStudioNames("");
-      queryClient.invalidateQueries({ queryKey: ["library-json", "studio-tiers.json"] });
-      if (selectedId === "studio-tiers.json") {
-        loadSelectedFile("studio-tiers.json").catch((e) => setParseError(String(e)));
-      }
+      setConfirm(null);
+      toast.success(t("Đã xóa", "Deleted"));
+      queryClient.invalidateQueries({ queryKey: ["library-pending"] });
     },
-    onError: (e: Error) => setParseError(e.message),
+    onError: (e: Error) => toast.error(e.message),
   });
 
   const handleFormatRaw = () => {
@@ -164,12 +191,13 @@ export default function LibrariesPage() {
       const o = JSON.parse(jsonRaw);
       setJsonRaw(JSON.stringify(o, null, 2));
       setParseError(null);
-    } catch (e) {
+    } catch {
       setParseError(t("Không format được — JSON lỗi", "Cannot format — invalid JSON"));
     }
   };
 
   const applyJsonRaw = () => {
+    if (!canWrite) return;
     try {
       const parsed = JSON.parse(jsonRaw);
       setLibraryData(parsed);
@@ -177,7 +205,9 @@ export default function LibrariesPage() {
       setDirty(true);
       setParseError(null);
     } catch (e) {
-      setParseError(t("JSON không hợp lệ", "Invalid JSON") + ": " + (e instanceof Error ? e.message : ""));
+      setParseError(
+        t("JSON không hợp lệ", "Invalid JSON") + ": " + (e instanceof Error ? e.message : ""),
+      );
     }
   };
 
@@ -189,163 +219,244 @@ export default function LibrariesPage() {
   };
 
   const pending: LibraryPendingItem[] = pendingQuery.data ?? [];
+  const pendingTypes = useMemo(() => {
+    const types = new Set(pending.map((p) => p.type));
+    return ["all", ...Array.from(types).sort()];
+  }, [pending]);
+
+  const filteredPending = useMemo(() => {
+    if (pendingTypeFilter === "all") return pending;
+    return pending.filter((p) => p.type === pendingTypeFilter);
+  }, [pending, pendingTypeFilter]);
+
+  const pendingCount = pending.length;
+  const canAddEntry = canWrite && selectedId && selectedId !== "pending-additions.json";
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold flex items-center gap-2">
-          <Library className="w-7 h-7 text-primary" />
-          {t("Thư viện rubric", "Rubric libraries")}
-        </h1>
-        <p className="text-muted-foreground text-sm mt-1 max-w-3xl">
+    <div className="space-y-4 w-full min-h-[calc(100vh-8rem)]">
+      <PageHeader
+        icon={<Library className="w-8 h-8" />}
+        title={t("Thư viện rubric", "Rubric libraries")}
+        description={t(
+          "Thêm mục mới qua modal (lưu ngay). Chỉnh sửa bảng bên dưới rồi bấm Lưu khi cần.",
+          "Add items via modal (saved immediately). Edit the table below, then Save when needed.",
+        )}
+      />
+
+      {!canWrite && (
+        <p className="text-sm rounded-lg border border-amber-500/40 bg-amber-500/10 text-amber-900 dark:text-amber-100 px-4 py-3">
           {t(
-            "Chỉnh thư viện dạng bảng; backend vẫn là JSON trong data/libraries. Proxy dev: /api → cổng backend (vite.config).",
-            "Edit libraries as tables; backend files remain JSON under data/libraries. Dev proxy maps /api to the backend port (see vite.config).",
+            "Chế độ chỉ xem — bạn không có quyền sửa Libraries.",
+            "Read-only mode — you do not have permission to edit libraries.",
           )}
         </p>
-      </div>
+      )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-[220px_1fr] gap-4">
-        <div className="bg-card rounded-xl border border-border p-4 h-fit max-h-[70vh] flex flex-col">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3 flex items-center gap-2">
-            <BookOpen className="w-4 h-4" />
-            {t("File", "Files")}
-          </h2>
-          {filesLoading ? (
-            <div className="flex items-center gap-2 text-muted-foreground text-sm">
-              <Loader2 className="w-4 h-4 animate-spin" /> {t("Đang tải…", "Loading…")}
-            </div>
-          ) : (
-            <ul className="space-y-1 overflow-y-auto flex-1 min-h-0 pr-1">
-              {fileIds.map((id) => (
-                <li key={id}>
-                  <button
-                    type="button"
-                    onClick={() => selectFile(id)}
-                    className={cn(
-                      "w-full text-left px-2 py-1.5 rounded-lg text-xs font-mono transition-colors",
-                      selectedId === id
-                        ? "bg-primary/15 text-primary border border-primary/40"
-                        : "hover:bg-muted/80 text-foreground/90",
-                    )}
-                  >
-                    {id}
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
-        </div>
+      <Tabs
+        active={mainTab}
+        onChange={(id) => setMainTab(id as typeof mainTab)}
+        tabs={[
+          { id: "documents", label: t("Tài liệu", "Documents") },
+          { id: "pending", label: t("Pending", "Pending"), badge: pendingCount },
+        ]}
+      />
 
-        <div className="bg-card rounded-xl border border-border p-4 flex flex-col min-h-[420px]">
-          <div className="flex flex-wrap items-center gap-2 mb-3">
-            <span className="text-sm font-mono text-muted-foreground flex-1 min-w-[12rem]">
-              {selectedId ?? t("— Chọn file —", "— Pick a file —")}
-            </span>
-            <button
-              type="button"
-              disabled={!selectedId || saveMutation.isPending}
-              onClick={() => selectedId && loadSelectedFile(selectedId)}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-sm hover:bg-muted disabled:opacity-50"
-            >
-              <RefreshCw className="w-4 h-4" />
-              {t("Tải lại", "Reload")}
-            </button>
-            <button
-              type="button"
-              disabled={!selectedId || !jsonRawOpen}
-              onClick={handleFormatRaw}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-sm hover:bg-muted disabled:opacity-50"
-              title={t("Format vùng JSON thô (khi đã mở)", "Format raw JSON (when open)")}
-            >
-              <Wand2 className="w-4 h-4" />
-              {t("Format JSON", "Format JSON")}
-            </button>
-            <button
-              type="button"
-              disabled={!selectedId || libraryData === null}
-              onClick={() => (jsonRawOpen ? setJsonRawOpen(false) : openJsonRaw())}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg border border-border text-sm hover:bg-muted disabled:opacity-50"
-            >
-              <Code2 className="w-4 h-4" />
-              {jsonRawOpen ? t("Đóng JSON thô", "Close raw JSON") : t("JSON thô", "Raw JSON")}
-            </button>
-            <button
-              type="button"
-              disabled={!selectedId || saveMutation.isPending || libraryData === null}
-              onClick={() => saveMutation.mutate()}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50"
-            >
-              {saveMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-              {t("Lưu", "Save")}
-            </button>
-          </div>
-
-          {!selectedId ? (
-            <p className="text-sm text-muted-foreground">{t("Chọn file bên trái…", "Select a file on the left…")}</p>
-          ) : libraryData === null ? (
-            <div className="flex items-center gap-2 text-muted-foreground text-sm">
-              <Loader2 className="w-4 h-4 animate-spin" /> {t("Đang tải…", "Loading…")}
-            </div>
-          ) : (
-            <div className="flex flex-col gap-3 flex-1 min-h-0">
-              <div className="overflow-y-auto max-h-[min(70vh,560px)] pr-1">
-                <LibraryTableEditor
-                  key={editorMountKey}
-                  fileId={selectedId}
-                  data={libraryData}
-                  onChange={handleLibraryChange}
-                />
+      {mainTab === "documents" && (
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(220px,260px)_1fr] gap-4 pt-2 min-h-[calc(100vh-14rem)]">
+          <nav className="bg-card rounded-xl border border-border p-3 flex flex-col max-h-[calc(100vh-14rem)]">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2 px-1">
+              {t("Tài liệu", "Documents")}
+            </p>
+            {filesLoading ? (
+              <div className="flex items-center gap-2 text-muted-foreground text-sm p-2">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                {t("Đang tải…", "Loading…")}
               </div>
-              {jsonRawOpen && (
-                <div className="rounded-lg border border-border bg-muted/20 p-3 space-y-2">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="text-xs font-medium text-muted-foreground">{t("JSON thô (nâng cao)", "Raw JSON (advanced)")}</span>
+            ) : (
+              <ul className="space-y-0.5 overflow-y-auto flex-1 min-h-0">
+                {documentFiles.map((id) => (
+                  <li key={id}>
                     <button
                       type="button"
-                      className="text-xs px-2 py-1 rounded border border-border hover:bg-muted"
-                      onClick={() => libraryData !== null && setJsonRaw(JSON.stringify(libraryData, null, 2))}
+                      onClick={() => selectFile(id)}
+                      className={cn(
+                        "w-full text-left px-2.5 py-2 rounded-lg text-sm transition-all duration-150",
+                        selectedId === id
+                          ? "bg-primary/15 text-primary font-medium"
+                          : "hover:bg-muted/80 hover:shadow-sm",
+                      )}
                     >
-                      {t("Đồng bộ từ bảng", "Sync from table")}
+                      <span className="block truncate">{libraryFileLabel(id, lang)}</span>
+                      <span className="block text-[10px] font-mono text-muted-foreground truncate mt-0.5">
+                        {id}
+                      </span>
                     </button>
-                    <button
-                      type="button"
-                      className="text-xs px-2 py-1 rounded bg-primary text-primary-foreground hover:bg-primary/90"
-                      onClick={applyJsonRaw}
-                    >
-                      {t("Áp dụng JSON", "Apply JSON")}
-                    </button>
-                  </div>
-                  <textarea
-                    className="w-full min-h-[200px] font-mono text-xs leading-relaxed p-3 rounded-lg border border-border bg-background text-foreground resize-y focus:outline-none focus:ring-2 focus:ring-primary/30"
-                    spellCheck={false}
-                    value={jsonRaw}
-                    onChange={(e) => setJsonRaw(e.target.value)}
-                    placeholder="{}"
+                  </li>
+                ))}
+              </ul>
+            )}
+          </nav>
+
+          <div className="flex flex-col min-h-0 rounded-xl border border-border bg-card overflow-hidden">
+            <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 px-4 py-3 border-b border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80">
+              <div className="flex-1 min-w-[10rem]">
+                <p className="font-medium text-sm truncate">
+                  {selectedId ? libraryFileLabel(selectedId, lang) : t("— Chọn tài liệu —", "— Select document —")}
+                </p>
+                {selectedId && (
+                  <p className="text-xs font-mono text-muted-foreground truncate">{selectedId}</p>
+                )}
+              </div>
+              {dirty && (
+                <span className="text-xs font-medium text-amber-600 dark:text-amber-400 px-2 py-0.5 rounded bg-amber-500/10">
+                  {t("Chưa lưu", "Unsaved")}
+                </span>
+              )}
+              {canAddEntry && (
+                <button
+                  type="button"
+                  onClick={() => setAddModalOpen(true)}
+                  className={cn(btnPrimary, "px-3 py-1.5 text-sm")}
+                >
+                  <Plus className="w-4 h-4" />
+                  {t("Thêm mới", "Add new")}
+                </button>
+              )}
+              <button
+                type="button"
+                disabled={!selectedId}
+                onClick={() => selectedId && loadSelectedFile(selectedId)}
+                className={cn(btnGhost, "px-3 py-1.5 text-sm")}
+              >
+                <RefreshCw className="w-4 h-4" />
+                {t("Tải lại", "Reload")}
+              </button>
+              <button
+                type="button"
+                disabled={!selectedId || libraryData === null}
+                onClick={() => (jsonRawOpen ? setJsonRawOpen(false) : openJsonRaw())}
+                className={cn(btnGhost, "px-3 py-1.5 text-sm")}
+              >
+                <Code2 className="w-4 h-4" />
+                {jsonRawOpen ? t("Đóng JSON", "Close JSON") : "JSON"}
+              </button>
+              {canWrite && (
+                <button
+                  type="button"
+                  disabled={!selectedId || saveMutation.isPending || libraryData === null || !dirty}
+                  onClick={() => saveMutation.mutate()}
+                  className={cn(btnPrimary, "px-3 py-1.5 text-sm")}
+                >
+                  {saveMutation.isPending ? (
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                  ) : (
+                    <Save className="w-4 h-4" />
+                  )}
+                  {t("Lưu chỉnh sửa", "Save edits")}
+                </button>
+              )}
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-4 min-h-0">
+              {!selectedId ? (
+                <p className="text-sm text-muted-foreground">{t("Chọn tài liệu bên trái…", "Select a document…")}</p>
+              ) : libraryData === null ? (
+                <div className="flex items-center gap-2 text-muted-foreground text-sm">
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  {t("Đang tải…", "Loading…")}
+                </div>
+              ) : (
+                <div className={cn(!canWrite && "pointer-events-none opacity-80")}>
+                  {canWrite && (
+                    <p className="text-xs text-muted-foreground mb-4 rounded-lg bg-muted/40 border border-border px-3 py-2">
+                      {t(
+                        "Thêm dòng mới: nút «Thêm mới» (lưu ngay). Sửa/xóa trong bảng rồi «Lưu chỉnh sửa».",
+                        "New rows: use «Add new» (saved immediately). Edit/delete in the table, then «Save edits».",
+                      )}
+                    </p>
+                  )}
+                  <LibraryTableEditor
+                    key={editorMountKey}
+                    fileId={selectedId}
+                    data={libraryData}
+                    onChange={handleLibraryChange}
                   />
                 </div>
               )}
-            </div>
-          )}
-          {parseError && (
-            <p className="mt-2 text-sm text-destructive" role="alert">
-              {parseError}
-            </p>
-          )}
-          {dirty && selectedId && (
-            <p className="mt-2 text-xs text-amber-600 dark:text-amber-400">{t("Có thay đổi chưa lưu.", "Unsaved changes.")}</p>
-          )}
-        </div>
-      </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        <div className="bg-card rounded-xl border border-border p-4">
-          <div className="flex items-center justify-between gap-2 mb-3">
-            <h2 className="text-sm font-semibold">{t("Merge request (pending)", "Merge requests (pending)")}</h2>
+              {jsonRawOpen && (
+                <details open className="mt-4 rounded-lg border border-border">
+                  <summary className="px-3 py-2 text-xs font-medium text-muted-foreground cursor-pointer flex items-center gap-1 hover:bg-muted/50 rounded-t-lg transition-colors">
+                    {t("JSON nâng cao", "Advanced JSON")}
+                    <ChevronDown className="w-3.5 h-3.5" />
+                  </summary>
+                  <div className="p-3 space-y-2 border-t border-border">
+                    <div className="flex flex-wrap gap-2">
+                      <button type="button" className={cn(btnGhost, "text-xs px-2 py-1")} onClick={handleFormatRaw}>
+                        <Wand2 className="w-3 h-3 inline mr-1" />
+                        Format
+                      </button>
+                      {canWrite && (
+                        <>
+                          <button
+                            type="button"
+                            className={cn(btnGhost, "text-xs px-2 py-1")}
+                            onClick={() =>
+                              libraryData !== null && setJsonRaw(JSON.stringify(libraryData, null, 2))
+                            }
+                          >
+                            {t("Đồng bộ từ bảng", "Sync from table")}
+                          </button>
+                          <button type="button" className={cn(btnPrimary, "text-xs px-2 py-1")} onClick={applyJsonRaw}>
+                            {t("Áp dụng", "Apply")}
+                          </button>
+                        </>
+                      )}
+                    </div>
+                    <textarea
+                      className="w-full min-h-[180px] font-mono text-xs p-3 rounded-lg border border-border bg-background resize-y focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      spellCheck={false}
+                      readOnly={!canWrite}
+                      value={jsonRaw}
+                      onChange={(e) => setJsonRaw(e.target.value)}
+                    />
+                  </div>
+                </details>
+              )}
+            </div>
+
+            {parseError && (
+              <p className="px-4 pb-3 text-sm text-destructive" role="alert">
+                {parseError}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {mainTab === "pending" && (
+        <div className="pt-2 space-y-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-sm text-muted-foreground">{t("Lọc loại", "Filter type")}:</span>
+            {pendingTypes.map((type) => (
+              <button
+                key={type}
+                type="button"
+                onClick={() => setPendingTypeFilter(type)}
+                className={cn(
+                  "text-xs px-2.5 py-1 rounded-full border transition-all duration-150",
+                  pendingTypeFilter === type
+                    ? "bg-primary text-primary-foreground border-primary"
+                    : "border-border hover:bg-muted hover:shadow-sm",
+                )}
+              >
+                {type === "all" ? t("Tất cả", "All") : type}
+              </button>
+            ))}
             <button
               type="button"
               onClick={() => pendingQuery.refetch()}
-              className="text-xs inline-flex items-center gap-1 px-2 py-1 rounded border border-border hover:bg-muted"
+              className={cn(btnGhost, "ml-auto text-xs px-2 py-1")}
             >
               <RefreshCw className={cn("w-3.5 h-3.5", pendingQuery.isFetching && "animate-spin")} />
               {t("Làm mới", "Refresh")}
@@ -353,69 +464,78 @@ export default function LibrariesPage() {
           </div>
           {pendingQuery.isPending ? (
             <p className="text-sm text-muted-foreground">{t("Đang tải…", "Loading…")}</p>
+          ) : filteredPending.length === 0 ? (
+            <p className="text-sm text-muted-foreground py-8 text-center">
+              {t("Không có pending", "No pending items")}
+            </p>
           ) : (
-            <div className="max-h-[min(70vh,520px)] overflow-y-auto">
+            <div className="rounded-xl border border-border bg-card p-4 max-h-[70vh] overflow-y-auto">
               <PendingMergeTable
-                pending={pending}
+                pending={filteredPending}
                 tierMap={tierMap}
-                onMerge={(id, body) => mergeMutation.mutate({ id, body })}
-                onDelete={(id) => deleteMutation.mutate(id)}
+                onMerge={(id, body) => {
+                  if (!canWrite) return;
+                  setConfirm({ kind: "merge", id, body });
+                }}
+                onDelete={(id) => {
+                  if (!canWrite) return;
+                  setConfirm({ kind: "delete", id });
+                }}
                 merging={mergeMutation.isPending}
                 deleting={deleteMutation.isPending}
               />
             </div>
           )}
         </div>
-
-        <div className="bg-card rounded-xl border border-border p-4">
-          <h2 className="text-sm font-semibold mb-1">{t("Thêm nhanh studio", "Quick-add studio")}</h2>
-          <p className="text-xs text-muted-foreground mb-3">
-            {t(
-              "Append vào studio-tiers.json — có thể chỉnh lại điểm trong bảng studio.",
-              "Appends to studio-tiers.json — adjust scores in the studio table if needed.",
-            )}
-          </p>
-          <div className="space-y-2">
-            <input
-              className="w-full px-3 py-2 rounded-lg border border-border bg-background text-sm"
-              placeholder={t("Tên studio (phân tách bởi dấu phẩy)", "Studio names (comma-separated)")}
-              value={studioNames}
-              onChange={(e) => setStudioNames(e.target.value)}
-            />
-            <div className="grid grid-cols-2 gap-2">
-              <input
-                type="number"
-                className="px-3 py-2 rounded-lg border border-border bg-background text-sm"
-                placeholder={t("Điểm", "Score")}
-                value={studioScore}
-                onChange={(e) => setStudioScore(e.target.value)}
-              />
-              <input
-                className="px-3 py-2 rounded-lg border border-border bg-background text-sm"
-                placeholder={t("Tier (tuỳ chọn)", "Tier (optional)")}
-                value={studioTier}
-                onChange={(e) => setStudioTier(e.target.value)}
-              />
-            </div>
-            <button
-              type="button"
-              disabled={studioMutation.isPending}
-              onClick={() => studioMutation.mutate()}
-              className="inline-flex items-center gap-2 px-3 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 disabled:opacity-50"
-            >
-              {studioMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
-              {t("Thêm entry", "Add entry")}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {lang === "en" && (
-        <p className="text-xs text-muted-foreground">
-          Tip: production builds should set{" "}
-          <code className="rounded bg-muted px-1">VITE_API_BASE_URL</code> if the API is not same-origin.
-        </p>
       )}
+
+      <LibraryAddEntryModal
+        fileId={selectedId}
+        open={addModalOpen}
+        onClose={() => setAddModalOpen(false)}
+        tierOptions={genreTierKeys}
+        onSuccess={() => {
+          toast.success(t("Đã thêm vào thư viện", "Added to library"));
+          queryClient.invalidateQueries({ queryKey: ["library-json", selectedId] });
+          if (selectedId) loadSelectedFile(selectedId).catch((e) => setParseError(String(e)));
+        }}
+      />
+
+      <Modal
+        open={confirm != null}
+        onClose={() => setConfirm(null)}
+        title={
+          confirm?.kind === "merge"
+            ? t("Xác nhận merge", "Confirm merge")
+            : t("Xác nhận xóa", "Confirm delete")
+        }
+        description={
+          confirm?.kind === "merge"
+            ? t("Gộp gợi ý AI vào thư viện chính?", "Merge this AI suggestion into the main library?")
+            : t("Xóa mục pending này?", "Delete this pending item?")
+        }
+        footer={
+          confirm && (
+            <ModalFooterActions
+              onCancel={() => setConfirm(null)}
+              onSubmit={() => {
+                if (confirm.kind === "merge") {
+                  mergeMutation.mutate({ id: confirm.id, body: confirm.body });
+                } else {
+                  deleteMutation.mutate(confirm.id);
+                }
+              }}
+              cancelLabel={t("Huỷ", "Cancel")}
+              submitLabel={confirm.kind === "merge" ? t("Merge", "Merge") : t("Xóa", "Delete")}
+              submitting={mergeMutation.isPending || deleteMutation.isPending}
+            />
+          )
+        }
+      >
+        <p className="text-sm text-muted-foreground">
+          {t("Thao tác này ghi trực tiếp vào database.", "This writes directly to the database.")}
+        </p>
+      </Modal>
     </div>
   );
 }

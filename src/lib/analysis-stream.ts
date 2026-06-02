@@ -66,6 +66,7 @@ export async function postAnalysisStream(
   const res = await fetch(`${API_BASE}${path}`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
+    credentials: "include",
     body: JSON.stringify({ ...(body as object), stream: true }),
   });
   return readNdjsonStream<AiAnalysis>(res, onProgress);
@@ -83,6 +84,7 @@ export async function postCsvAnalysisStream(
 
   const res = await fetch(`${API_BASE}/analysis/analyze-csv`, {
     method: "POST",
+    credentials: "include",
     body: formData,
   });
   return readNdjsonStream<AiAnalysis>(res, onProgress);

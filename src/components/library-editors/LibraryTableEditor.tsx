@@ -1,7 +1,9 @@
 import { useState, useMemo, useCallback, useEffect } from "react";
-import { Plus, Trash2 } from "lucide-react";
+import { Trash2 } from "lucide-react";
+import { btnIconDanger } from "@/lib/button-classes";
 import { cn } from "@/lib/utils";
 import { useUiCopy } from "@/lib/use-ui-copy";
+import { btnGhost, btnDanger } from "@/lib/button-classes";
 import type { LibraryPendingItem } from "@/types";
 import {
   type GenreTiersJson,
@@ -130,28 +132,14 @@ function GenreEditor({ value, onChange }: { value: GenreTiersJson; onChange: (v:
       </div>
 
       <div>
-        <div className="flex items-center justify-between mb-2">
-          <div>
-            <h4 className="text-xs font-semibold">{t("Genre / từ khóa (EN)", "Genre keywords (EN)")}</h4>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {t(
-                "Mỗi dòng là một từ khóa; chọn Tier → điểm lấy theo bảng tier phía trên. Trùng từ khóa: dòng sau ghi đè tier.",
-                "One row per keyword; pick a tier → score comes from the tier table above. Duplicate keyword: the lower row wins.",
-              )}
-            </p>
-          </div>
-          <button
-            type="button"
-            className="text-xs inline-flex items-center gap-1 px-2 py-1 rounded-md bg-primary text-primary-foreground shrink-0"
-            onClick={() =>
-              commitFlat([
-                ...flatRows,
-                { keyword: "", tier: (tierOptions[0] ?? "B") as string },
-              ])
-            }
-          >
-            <Plus className="w-3.5 h-3.5" /> {t("Thêm genre", "Add row")}
-          </button>
+        <div className="mb-2">
+          <h4 className="text-xs font-semibold">{t("Genre / từ khóa (EN)", "Genre keywords (EN)")}</h4>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {t(
+              "Mỗi dòng là một từ khóa; chọn Tier → điểm lấy theo bảng tier phía trên. Thêm mới: nút «Thêm mới» trên thanh công cụ.",
+              "One row per keyword; tier maps to score above. Add new rows via the toolbar «Add new» button.",
+            )}
+          </p>
         </div>
         <div className="overflow-x-auto rounded-lg border border-border">
           <table className="w-full text-xs">
@@ -206,7 +194,7 @@ function GenreEditor({ value, onChange }: { value: GenreTiersJson; onChange: (v:
                     <td className="p-2">
                       <button
                         type="button"
-                        className="p-1 rounded hover:bg-destructive/10 text-destructive"
+                        className={btnIconDanger}
                         onClick={() => commitFlat(flatRows.filter((_, j) => j !== i))}
                       >
                         <Trash2 className="w-4 h-4" />
@@ -257,23 +245,14 @@ function StudioEditor({ value, onChange }: { value: StudioTiersJson; onChange: (
       </div>
 
       <div>
-        <div className="flex items-center justify-between mb-2 gap-2">
-          <div>
-            <h4 className="text-xs font-semibold">{t("Studio / nhà phát triển", "Studios / developers")}</h4>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {t(
-                "Mỗi dòng là một tên (hoặc alias). Cùng điểm + tier + roles được gộp khi lưu. Trùng tên: dòng sau ghi đè.",
-                "One row per studio name or alias. Same score + tier + roles merge on save. Duplicate name: lower row wins.",
-              )}
-            </p>
-          </div>
-          <button
-            type="button"
-            className="text-xs inline-flex items-center gap-1 px-2 py-1 rounded-md bg-primary text-primary-foreground shrink-0"
-            onClick={() => commitFlat([...flatRows, { name: "", score: 55, tier: "custom", roles: "developer" }])}
-          >
-            <Plus className="w-3.5 h-3.5" /> {t("Thêm dòng", "Add row")}
-          </button>
+        <div className="mb-2">
+          <h4 className="text-xs font-semibold">{t("Studio / nhà phát triển", "Studios / developers")}</h4>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {t(
+              "Chỉnh/xóa tại đây rồi Lưu chỉnh sửa. Thêm studio mới: «Thêm mới» trên thanh công cụ.",
+              "Edit/delete here then Save edits. Add studios via toolbar «Add new».",
+            )}
+          </p>
         </div>
         <div className="overflow-x-auto rounded-lg border border-border">
           <table className="w-full text-xs">
@@ -339,7 +318,7 @@ function StudioEditor({ value, onChange }: { value: StudioTiersJson; onChange: (
                   <td className="p-2">
                     <button
                       type="button"
-                      className="p-1 rounded hover:bg-destructive/10 text-destructive"
+                      className={btnIconDanger}
                       onClick={() => commitFlat(flatRows.filter((_, j) => j !== i))}
                     >
                       <Trash2 className="w-4 h-4" />
@@ -413,16 +392,7 @@ function KeywordPatternsEditor({
       </label>
 
       <div>
-        <div className="flex items-center justify-between mb-2 gap-2">
-          <h4 className="text-xs font-semibold">{t("Từ khóa", "Keywords")}</h4>
-          <button
-            type="button"
-            className="text-xs inline-flex items-center gap-1 px-2 py-1 rounded-md bg-primary text-primary-foreground shrink-0"
-            onClick={() => commitFlat([...flatRows, { keyword: "", score: 70 }])}
-          >
-            <Plus className="w-3.5 h-3.5" /> {t("Thêm dòng", "Add row")}
-          </button>
-        </div>
+        <h4 className="text-xs font-semibold mb-2">{t("Từ khóa", "Keywords")}</h4>
         <div className="overflow-x-auto rounded-lg border border-border">
           <table className="w-full text-xs">
             <thead>
@@ -462,7 +432,7 @@ function KeywordPatternsEditor({
                   <td className="p-2">
                     <button
                       type="button"
-                      className="p-1 rounded hover:bg-destructive/10 text-destructive"
+                      className={btnIconDanger}
                       onClick={() => commitFlat(flatRows.filter((_, j) => j !== i))}
                     >
                       <Trash2 className="w-4 h-4" />
@@ -492,14 +462,6 @@ function RulesRowsEditor({
   const rules = ensureArray<Record<string, unknown>>(value.rules);
 
   const setRules = (rows: typeof rules) => onChange({ ...value, rules: rows });
-
-  const addRow = () => {
-    if (variant === "mb") {
-      setRules([...rules, { maxMb: 1000, score: 70, label: "" }]);
-    } else {
-      setRules([...rules, { maxDaysSinceUpdate: 30, score: 70, label: "" }]);
-    }
-  };
 
   const thresholdTitle =
     variant === "mb"
@@ -556,14 +518,12 @@ function RulesRowsEditor({
       </label>
 
       <div>
-        <div className="flex items-center justify-between mb-2 gap-2">
-          <div>
-            <h4 className="text-xs font-semibold">{thresholdTitle}</h4>
-            <p className="text-xs text-muted-foreground mt-0.5">{thresholdHint}</p>
-          </div>
-          <button type="button" className="text-xs inline-flex items-center gap-1 px-2 py-1 rounded-md bg-primary text-primary-foreground shrink-0" onClick={addRow}>
-            <Plus className="w-3.5 h-3.5" /> {t("Thêm rule", "Add row")}
-          </button>
+        <div className="mb-2">
+          <h4 className="text-xs font-semibold">{thresholdTitle}</h4>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {thresholdHint}{" "}
+            {t("Thêm rule mới: «Thêm mới» trên thanh công cụ.", "New rules: toolbar «Add new».")}
+          </p>
         </div>
         <div className="overflow-x-auto rounded-lg border border-border">
           <table className="w-full text-xs">
@@ -619,7 +579,7 @@ function RulesRowsEditor({
                   <td className="p-2">
                     <button
                       type="button"
-                      className="p-1 rounded hover:bg-destructive/10 text-destructive"
+                      className={btnIconDanger}
                       onClick={() => setRules(rules.filter((_, j) => j !== i))}
                     >
                       <Trash2 className="w-4 h-4" />
@@ -670,23 +630,14 @@ function CommunityEditor({ value, onChange }: { value: CommunityLibJson; onChang
       </label>
 
       <div>
-        <div className="flex items-center justify-between mb-2 gap-2">
-          <div>
-            <h4 className="text-xs font-semibold">{t("Bậc theo số fans / community", "Fan count tiers")}</h4>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {t(
-                "Mỗi dòng: ngưỡng tối thiểu fans và điểm tương ứng (logic backend sort theo minFans).",
-                "Each row: minimum fans threshold and score (backend picks highest matching tier).",
-              )}
-            </p>
-          </div>
-          <button
-            type="button"
-            className="text-xs inline-flex items-center gap-1 px-2 py-1 rounded-md bg-primary text-primary-foreground shrink-0"
-            onClick={() => setFan([...fanTierRules, { minFans: 0, score: 55 }])}
-          >
-            <Plus className="w-3.5 h-3.5" /> {t("Thêm dòng", "Add row")}
-          </button>
+        <div className="mb-2">
+          <h4 className="text-xs font-semibold">{t("Bậc theo số fans / community", "Fan count tiers")}</h4>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {t(
+              "Thêm bậc mới: «Thêm mới» trên thanh công cụ.",
+              "Add tiers via toolbar «Add new».",
+            )}
+          </p>
         </div>
         <div className="overflow-x-auto rounded-lg border border-border">
           <table className="w-full text-xs">
@@ -727,7 +678,7 @@ function CommunityEditor({ value, onChange }: { value: CommunityLibJson; onChang
                   <td className="p-2">
                     <button
                       type="button"
-                      className="p-1 rounded hover:bg-destructive/10 text-destructive"
+                      className={btnIconDanger}
                       onClick={() => setFan(fanTierRules.filter((_, j) => j !== i))}
                     >
                       <Trash2 className="w-4 h-4" />
@@ -1011,18 +962,15 @@ export function PendingMergeTable({
                         : t("Nhập đủ điểm / từ khóa EN (nếu cần)", "Fill score / EN keywords as required")
                     }
                     onClick={() => onMerge(p.id, body)}
-                    className="px-2 py-1 rounded border border-border hover:bg-muted disabled:opacity-40"
+                    className={cn(btnGhost, "px-2 py-1 text-xs disabled:opacity-40")}
                   >
-                    {t("Merge → JSON", "Merge → JSON")}
+                    {t("Merge", "Merge")}
                   </button>
                   <button
                     type="button"
                     disabled={deleting}
-                    onClick={() => {
-                      if (!window.confirm(t("Xóa dòng pending này?", "Delete this pending row?"))) return;
-                      onDelete(p.id);
-                    }}
-                    className="px-2 py-1 rounded border border-destructive/40 text-destructive hover:bg-destructive/10 disabled:opacity-50"
+                    onClick={() => onDelete(p.id)}
+                    className={cn(btnDanger, "px-2 py-1 text-xs")}
                   >
                     {t("Xóa", "Delete")}
                   </button>

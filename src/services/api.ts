@@ -17,11 +17,44 @@ import type { ReviewWindow } from "@/types/review-window";
 import type { HistoryRange } from "@/types/history-range";
 import type { AnalysisProgressUpdate } from "@/lib/analysis-stream";
 import { postAnalysisStream, postCsvAnalysisStream } from "@/lib/analysis-stream";
+import type { AdminMeta, AdminUserRow, AuthUser, PermissionKey, UserRole } from "@/types/auth";
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || "/api",
   timeout: 30000,
+  withCredentials: true,
 });
+
+export async function fetchAuthMe(): Promise<AuthUser> {
+  const { data } = await api.get<ApiResponse<AuthUser>>("/auth/me");
+  return data.data;
+}
+
+export async function logoutAuth(): Promise<void> {
+  await api.post("/auth/logout");
+}
+
+export async function fetchAdminUsers(): Promise<AdminUserRow[]> {
+  const { data } = await api.get<ApiResponse<AdminUserRow[]>>("/admin/users");
+  return data.data;
+}
+
+export async function fetchAdminMeta(): Promise<AdminMeta> {
+  const { data } = await api.get<ApiResponse<AdminMeta>>("/admin/meta");
+  return data.data;
+}
+
+export async function patchAdminUser(
+  id: string,
+  body: {
+    status?: "PENDING" | "ACTIVE";
+    role?: UserRole;
+    permissions?: Partial<Record<PermissionKey, boolean>>;
+  },
+): Promise<AdminUserRow> {
+  const { data } = await api.patch<ApiResponse<AdminUserRow>>(`/admin/users/${id}`, body);
+  return data.data;
+}
 
 export async function fetchDashboard(): Promise<DashboardStats> {
   const { data } = await api.get<ApiResponse<DashboardStats>>("/games/dashboard");
@@ -306,4 +339,13 @@ export async function appendLibraryStudio(input: {
 }): Promise<void> {
   const { data } = await api.post<{ success: boolean; error?: string }>("/libraries/studio", input);
   if (!data.success) throw new Error(data.error || "Thêm studio thất bại");
+}
+
+/** Append one row to a library document (immediate persist, no full PUT). */
+export async function postLibraryEntry(fileId: string, body: Record<string, unknown>): Promise<void> {
+  const { data } = await api.post<{ success: boolean; error?: string }>(
+    `/libraries/${encodeURIComponent(fileId)}/entries`,
+    body,
+  );
+  if (!data.success) throw new Error(data.error || "Thêm thất bại");
 }

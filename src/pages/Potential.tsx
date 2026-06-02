@@ -410,7 +410,9 @@ function PotentialRankingTable({
                     <th className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
                       {t("Tag BXH", "Chart tags")}
                     </th>
-                    <th className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase">{t("Loại", "Type")}</th>
+                    <th className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase whitespace-nowrap w-px">
+                      {t("Loại", "Type")}
+                    </th>
                   </>
                 )}
                 <th className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase">{t("Hạng", "Rank")}</th>
@@ -461,7 +463,7 @@ function PotentialRankingTable({
                       <td className="px-3 py-3">
                         <LaunchBoardTags tags={s.launchBoardTags} />
                       </td>
-                      <td className="px-3 py-3">
+                      <td className="px-3 py-3 whitespace-nowrap w-px">
                         <LaunchCategoryBadge category={s.launchCategory} t={t} />
                       </td>
                     </>
@@ -525,14 +527,14 @@ function LaunchCategoryBadge({
 }) {
   if (category === "new_launch") {
     return (
-      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-700 dark:text-violet-300">
+      <span className="inline-flex shrink-0 whitespace-nowrap text-[10px] font-semibold px-1.5 py-0.5 rounded bg-violet-500/15 text-violet-700 dark:text-violet-300">
         {t("Mới", "New")}
       </span>
     );
   }
   if (category === "established_launch") {
     return (
-      <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-800 dark:text-sky-300">
+      <span className="inline-flex shrink-0 whitespace-nowrap text-[10px] font-semibold px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-800 dark:text-sky-300">
         {t("Đã ra mắt", "Launched")}
       </span>
     );

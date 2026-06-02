@@ -25,6 +25,8 @@ import { buildFanReserveDeltaSeries, formatDelta } from "@/lib/chart-delta";
 import { useUiCopy, potentialRadarMetric } from "@/lib/use-ui-copy";
 import { cn, formatNumber, getScoreColor } from "@/lib/utils";
 import type { AiAnalysis, GameReview, GamePotentialDetail, PotentialBreakdown } from "@/types";
+import { useAuth } from "@/contexts/AuthContext";
+import { hasPermission } from "@/lib/permissions";
 
 const STAR_COLORS: Record<string, string> = {
   "1": "bg-red-500",
@@ -39,6 +41,12 @@ export default function GameDetail() {
   const navigate = useNavigate();
   const { lang: contentLang } = useContentLang();
   const { t } = useUiCopy();
+  const { user } = useAuth();
+  const canReviews = hasPermission(user, "crawl.reviews");
+  const canPotential = hasPermission(user, "analytics.potential");
+  const canAiRead = hasPermission(user, "ai.read");
+  const canAiRun = hasPermission(user, "ai.run");
+  const canAiDelete = hasPermission(user, "ai.delete");
   const [historyRange, setHistoryRange] = useState<HistoryRange>({ kind: "days", days: 30 });
   const [reviewPage, setReviewPage] = useState(1);
   const appId = parseInt(id || "0");
@@ -52,14 +60,14 @@ export default function GameDetail() {
   const { data: reviews } = useQuery({
     queryKey: ["reviews", appId, reviewPage],
     queryFn: () => fetchGameReviews(appId, reviewPage),
-    enabled: appId > 0,
+    enabled: appId > 0 && canReviews,
   });
 
   const [potentialDays, setPotentialDays] = useState(14);
   const { data: potentialBreakdown } = useQuery({
     queryKey: ["potential-breakdown", appId, potentialDays],
     queryFn: () => fetchGamePotentialBreakdown(appId, potentialDays, "combined"),
-    enabled: appId > 0,
+    enabled: appId > 0 && canPotential,
   });
 
   const queryClient = useQueryClient();
@@ -67,13 +75,13 @@ export default function GameDetail() {
   const { data: savedAnalysis } = useQuery({
     queryKey: ["ai-analysis", appId],
     queryFn: () => fetchLatestAnalysis(appId),
-    enabled: appId > 0,
+    enabled: appId > 0 && canAiRead,
   });
 
   const { data: analysisHistory } = useQuery({
     queryKey: ["ai-analysis-history", appId],
     queryFn: () => fetchAnalysisHistory(appId),
-    enabled: appId > 0,
+    enabled: appId > 0 && canAiRead,
   });
 
   const [reviewWindow, setReviewWindow] = useState<ReviewWindow>(DEFAULT_REVIEW_WINDOW);
@@ -219,22 +227,26 @@ export default function GameDetail() {
       {/* Review Distribution */}
       <ReviewDistributionCard distribution={game.reviewDistribution} actualCount={game.actualReviewCount} />
 
-      {/* Potential Analysis — moved above charts */}
-      <PotentialBreakdownSection
-        breakdown={potentialBreakdown}
-        days={potentialDays}
-        setDays={setPotentialDays}
-      />
+      {canPotential && (
+        <PotentialBreakdownSection
+          breakdown={potentialBreakdown}
+          days={potentialDays}
+          setDays={setPotentialDays}
+        />
+      )}
 
-      {/* AI Analysis — moved above charts */}
-      <AIAnalysisSection
-        analysisResult={analysisResult}
-        analysisMutation={analysisMutation}
-        analysisProgress={analysisProgress}
-        history={analysisHistory ?? []}
-        reviewWindow={reviewWindow}
-        onReviewWindowChange={setReviewWindow}
-      />
+      {canAiRead && (
+        <AIAnalysisSection
+          analysisResult={analysisResult}
+          analysisMutation={analysisMutation}
+          analysisProgress={analysisProgress}
+          history={analysisHistory ?? []}
+          reviewWindow={reviewWindow}
+          onReviewWindowChange={setReviewWindow}
+          canRun={canAiRun}
+          canDelete={canAiDelete}
+        />
+      )}
 
       {/* Charts */}
       <div className="bg-card rounded-xl border border-border p-5">
@@ -299,7 +311,7 @@ export default function GameDetail() {
         </ResponsiveContainer>
       </div>
 
-      {/* User Reviews */}
+      {canReviews && (
       <div className="bg-card rounded-xl border border-border p-5">
         <h2 className="text-lg font-semibold mb-4">
           {t("Bình luận người chơi", "User Reviews")}
@@ -344,6 +356,7 @@ export default function GameDetail() {
           <p className="text-muted-foreground text-sm text-center py-8">{t("Chưa có bình luận", "No reviews available")}</p>
         )}
       </div>
+      )}
     </div>
   );
 }
@@ -404,6 +417,8 @@ function AIAnalysisSection({
   history,
   reviewWindow,
   onReviewWindowChange,
+  canRun,
+  canDelete,
 }: {
   analysisResult: AiAnalysis | undefined;
   analysisMutation: { mutate: () => void; isPending: boolean; isError: boolean; error: Error | null };
@@ -411,6 +426,8 @@ function AIAnalysisSection({
   history: AiAnalysis[];
   reviewWindow: ReviewWindow;
   onReviewWindowChange: (w: ReviewWindow) => void;
+  canRun: boolean;
+  canDelete: boolean;
 }) {
   const [showHistory, setShowHistory] = useState(false);
   const [modalAnalysis, setModalAnalysis] = useState<AiAnalysis | null>(null);
@@ -452,7 +469,7 @@ function AIAnalysisSection({
     } catch { /* ignore */ }
   };
 
-  const runBlock = (
+  const runBlock = canRun ? (
     <div className="mb-4 max-w-lg mx-auto text-center">
       <ReviewWindowPicker value={reviewWindow} onChange={onReviewWindowChange} className="mb-4" />
       {analysisMutation.isPending && (
@@ -480,7 +497,7 @@ function AIAnalysisSection({
         </p>
       )}
     </div>
-  );
+  ) : null;
 
   if (!overview && history.length === 0) {
     return (
@@ -549,17 +566,19 @@ function AIAnalysisSection({
                   >
                     {t("Chi tiết", "Details")}
                   </button>
-                  <button
-                    type="button"
-                    onClick={() => h.analyzedAt && handleDelete(h.analyzedAt)}
-                    className="p-1 rounded hover:bg-red-500/10 text-muted-foreground hover:text-red-500 shrink-0"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                  {canDelete && (
+                    <button
+                      type="button"
+                      onClick={() => h.analyzedAt && handleDelete(h.analyzedAt)}
+                      className="p-1 rounded hover:bg-red-500/10 text-muted-foreground hover:text-red-500 shrink-0"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
-            {history.length > 1 && (
+            {canDelete && history.length > 1 && (
               <div className="px-3 py-2 border-t border-border/50 bg-muted/30">
                 <button type="button" onClick={handleDeleteAll} className="text-xs text-red-500 hover:text-red-600 flex items-center gap-1">
                   <Trash2 className="w-3 h-3" /> {t("Xóa tất cả phân tích", "Delete all analyses")}
