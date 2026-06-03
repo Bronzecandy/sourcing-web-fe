@@ -27,6 +27,7 @@ async function readNdjsonStream<T>(
   const decoder = new TextDecoder();
   let buffer = "";
 
+  try {
   for (;;) {
     const { done, value } = await reader.read();
     if (done) break;
@@ -56,6 +57,16 @@ async function readNdjsonStream<T>(
   }
 
   throw new Error("Kết thúc luồng không hợp lệ — thử lại.");
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    if (/network error|failed to fetch|load failed|err_incomplete/i.test(msg)) {
+      throw new Error(
+        "Mất kết nối với server trong lúc phân tích (thường do proxy/nginx timeout ~60s khi tải DB lâu). " +
+          "Thử khoảng ngày ngắn hơn, đặt SKIP_WARMUP=1 trên server, hoặc tăng proxy_read_timeout.",
+      );
+    }
+    throw err;
+  }
 }
 
 export async function postAnalysisStream(
