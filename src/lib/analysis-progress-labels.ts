@@ -1,4 +1,5 @@
 import type { AnalysisProgressUpdate } from "@/lib/analysis-stream";
+import { AI_MAX_REVIEWS_FOR_ANALYSIS } from "@/lib/ai-review-cap";
 
 export type FormattedProgress = {
   title: string;
@@ -74,8 +75,8 @@ export function formatAnalysisProgress(
   if (update.phase === "fetch" && detail) {
     if (detail.capped && detail.total != null) {
       title = t(
-        `Đang chọn bình luận đại diện (tối đa ${nf(10_000)} / ${nf(detail.total)} bình luận)…`,
-        `Selecting a representative sample (up to ${nf(10_000)} of ${nf(detail.total)} reviews)…`,
+        `Đang chọn bình luận đại diện (tối đa ${nf(AI_MAX_REVIEWS_FOR_ANALYSIS)} / ${nf(detail.total)} bình luận)…`,
+        `Selecting a representative sample (up to ${nf(AI_MAX_REVIEWS_FOR_ANALYSIS)} of ${nf(detail.total)} reviews)…`,
       );
     } else {
       title = t("Đang tải bình luận từ cơ sở dữ liệu…", "Loading reviews from database…");
