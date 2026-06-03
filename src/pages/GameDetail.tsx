@@ -12,7 +12,7 @@ import { localizeAnalysisToEn, getSummaryBullets, mainAnalysisScore } from "@/li
 import ReviewWindowPicker from "@/components/ReviewWindowPicker";
 import AnalysisProgressPanel, {
   INITIAL_ANALYSIS_PROGRESS,
-  appendProgressLog,
+  appendProgressFromStream,
   type AnalysisProgressState,
 } from "@/components/AnalysisProgressPanel";
 import type { AnalysisProgressUpdate } from "@/lib/analysis-stream";
@@ -90,9 +90,12 @@ export default function GameDetail() {
   const [analysisProgress, setAnalysisProgress] =
     useState<AnalysisProgressState>(INITIAL_ANALYSIS_PROGRESS);
 
-  const onAnalysisProgress = useCallback((p: AnalysisProgressUpdate) => {
-    setAnalysisProgress((prev) => appendProgressLog(prev, p.message, p.percent));
-  }, []);
+  const onAnalysisProgress = useCallback(
+    (p: AnalysisProgressUpdate) => {
+      setAnalysisProgress((prev) => appendProgressFromStream(prev, p, t));
+    },
+    [t],
+  );
 
   const analysisMutation = useMutation({
     mutationFn: () => triggerAnalysis(appId, reviewWindow, onAnalysisProgress),

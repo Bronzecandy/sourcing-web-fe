@@ -1,10 +1,19 @@
 import type { AiAnalysis } from "@/types";
 
+export type AnalysisProgressDetail = {
+  collected?: number;
+  total?: number;
+  step?: number;
+  stepTotal?: number;
+  capped?: boolean;
+};
+
 export type AnalysisProgressUpdate = {
   type: "progress";
   phase: string;
   message: string;
   percent: number;
+  detail?: AnalysisProgressDetail;
 };
 
 type DoneLine =
