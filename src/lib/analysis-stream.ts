@@ -61,8 +61,8 @@ async function readNdjsonStream<T>(
     const msg = err instanceof Error ? err.message : String(err);
     if (/network error|failed to fetch|load failed|err_incomplete/i.test(msg)) {
       throw new Error(
-        "Mất kết nối với server trong lúc phân tích (thường do proxy/nginx timeout ~60s khi tải DB lâu). " +
-          "Thử khoảng ngày ngắn hơn, đặt SKIP_WARMUP=1 trên server, hoặc tăng proxy_read_timeout.",
+        "Mất kết nối với server trong lúc phân tích (proxy timeout hoặc warm-up Phase 3 tranh pool DB). " +
+          "Trên server: SKIP_WARMUP=1 khi test AI; tăng proxy_read_timeout 600s nếu có nginx.",
       );
     }
     throw err;
