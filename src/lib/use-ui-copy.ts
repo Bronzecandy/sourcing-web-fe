@@ -39,6 +39,8 @@ export function potentialRadarMetric(metric: string, lang: ContentLang): string 
     Momentum: ["Đà tăng", "Momentum"],
     Engagement: ["Tương tác người chơi", "Engagement"],
     Stability: ["Ổn định xếp hạng", "Stability"],
+    Charts: ["BXH Launch", "Launch Charts"],
+    PreLaunch: ["Reserve trước launch", "Pre-launch Reserve"],
   };
   const p = pairs[metric];
   if (!p) return metric;

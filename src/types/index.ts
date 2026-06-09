@@ -299,8 +299,11 @@ export interface GamePotentialDetail {
   momentum: {
     score: number;
     positionScore: number;
+    avgRank: number;
     avgRecentRank: number;
     rankChangeScore: number;
+    climbScore: number;
+    maintenanceScore: number;
     absoluteScore: number;
     relativeScore: number;
     peakScore: number;
@@ -361,6 +364,20 @@ export interface GamePotentialDetail {
   rawComposite: number;
   segment?: PotentialSegment;
   preLaunchBonus?: number;
+  preLaunchScore?: number;
+  launchBoard?: {
+    primaryBoard: "pop" | "hot" | "new" | null;
+    primaryRank: number | null;
+    score: number;
+    chartQuality: number;
+    consistency: number;
+    coverage: number;
+    popDayRate: number;
+    hotDayRate: number;
+    newDayRate: number;
+    activeBoardCount: number;
+    activeBoards: Array<{ board: "pop" | "hot" | "new"; rank: number | null }>;
+  };
 }
 
 export interface PotentialLifecycleMeta {
