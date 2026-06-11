@@ -3,6 +3,7 @@ import {
   LayoutDashboard,
   Trophy,
   TrendingUp,
+  BarChart3,
   Brain,
   Library,
   Shield,
@@ -38,6 +39,12 @@ const NAV_ITEMS: Array<{
     icon: TrendingUp,
     label: "Potential Analysis",
     permissions: ["analytics.potential"],
+  },
+  {
+    to: "/distribution",
+    icon: BarChart3,
+    label: "Distribution",
+    permissions: ["analytics.distribution"],
   },
   {
     to: "/ai-analysis",

@@ -12,6 +12,13 @@ import type {
   AiAnalysis,
   ApiResponse,
   LibraryPendingItem,
+  DistributionResponse,
+  DistributionMeta,
+  DistributionMetric,
+  DistributionLifecycleFilter,
+  DistributionOverviewResponse,
+  DistributionTrendsResponse,
+  DistributionTab,
 } from "../types";
 import type { ReviewWindow } from "@/types/review-window";
 import type { HistoryRange } from "@/types/history-range";
@@ -58,6 +65,61 @@ export async function patchAdminUser(
 
 export async function fetchDashboard(): Promise<DashboardStats> {
   const { data } = await api.get<ApiResponse<DashboardStats>>("/games/dashboard");
+  return data.data;
+}
+
+export async function fetchDistributionMeta(): Promise<DistributionMeta> {
+  const { data } = await api.get<ApiResponse<DistributionMeta>>("/analytics/distribution/meta");
+  return data.data;
+}
+
+export async function fetchDistribution(params: {
+  year: number;
+  month?: number;
+  metric: DistributionMetric;
+  lifecycle: DistributionLifecycleFilter;
+}): Promise<DistributionResponse> {
+  const { data } = await api.get<ApiResponse<DistributionResponse>>("/analytics/distribution", {
+    params,
+  });
+  return data.data;
+}
+
+export async function fetchDistributionOverview(params: {
+  year?: number | null;
+  month?: number;
+  lifecycle: DistributionTab;
+}): Promise<DistributionOverviewResponse> {
+  const { data } = await api.get<ApiResponse<DistributionOverviewResponse>>(
+    "/analytics/distribution/overview",
+    {
+      params: {
+        ...params,
+        year: params.year == null ? "all" : params.year,
+        month: params.month,
+      },
+      timeout: 180_000,
+    },
+  );
+  return data.data;
+}
+
+export async function fetchDistributionTrends(params: {
+  year?: number | null;
+  month?: number;
+  lifecycle: DistributionTab;
+}): Promise<DistributionTrendsResponse> {
+  const { data } = await api.get<ApiResponse<DistributionTrendsResponse>>(
+    "/analytics/distribution/overview/trends",
+    {
+      params: {
+        ...params,
+        year: params.year == null ? "all" : params.year,
+        month: params.month,
+      },
+      timeout: 300_000,
+    },
+  );
   return data.data;
 }
 

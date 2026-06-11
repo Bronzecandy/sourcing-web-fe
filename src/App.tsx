@@ -22,6 +22,7 @@ const Libraries = lazy(() => import("./pages/Libraries"));
 const Login = lazy(() => import("./pages/Login"));
 const Waiting = lazy(() => import("./pages/Waiting"));
 const AdminUsers = lazy(() => import("./pages/AdminUsers"));
+const Distribution = lazy(() => import("./pages/Distribution"));
 
 function PageLoader() {
   return (
@@ -76,6 +77,7 @@ export default function App() {
                   <Route path="/ranking" element={<Ranking />} />
                   <Route path="/game/:id" element={<GameDetail />} />
                   <Route path="/potential" element={<Potential />} />
+                  <Route path="/distribution" element={<Distribution />} />
                   <Route path="/ai-analysis" element={<AIAnalysis />} />
                   <Route path="/libraries" element={<Libraries />} />
                   <Route path="/admin/users" element={<AdminUsers />} />
