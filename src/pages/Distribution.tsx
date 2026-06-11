@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { BarChart3, CalendarRange } from "lucide-react";
+import {
+  BarChart3,
+  Bookmark,
+  CalendarRange,
+  Clock,
+  Sparkles,
+  type LucideIcon,
+} from "lucide-react";
 import {
   fetchDistributionMeta,
   fetchDistributionOverview,
@@ -16,7 +23,7 @@ const TAB_CONFIG: Array<{
   id: DistributionTab;
   labelVi: string;
   labelEn: string;
-  icon: typeof Bookmark;
+  icon: LucideIcon;
   descVi: string;
   descEn: string;
 }> = [
@@ -173,7 +180,7 @@ export default function Distribution() {
 
           <FilterSelect
             label={t("Tháng", "Month")}
-            value={month ?? "all"}
+            value={month == null ? "all" : String(month)}
             onChange={(v) => setMonth(v === "all" ? null : Number(v))}
           >
             <option value="all">

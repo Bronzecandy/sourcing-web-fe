@@ -83,7 +83,7 @@ export const PERMISSION_GROUPS: Array<{
     id: "analytics",
     labelVi: "Phân tích Potential",
     labelEn: "Potential analytics",
-    keys: ["analytics.potential"],
+    keys: ["analytics.potential", "analytics.distribution"],
   },
   {
     id: "ai",
@@ -113,6 +113,7 @@ export const PERMISSION_LABELS: Record<
   "crawl.game": { vi: "Chi tiết game", en: "Game detail" },
   "crawl.reviews": { vi: "Reviews (AppReview)", en: "Reviews (AppReview)" },
   "analytics.potential": { vi: "Potential & breakdown", en: "Potential & breakdown" },
+  "analytics.distribution": { vi: "Phân phối số liệu", en: "Metric distribution" },
   "ai.read": { vi: "Xem AI Review", en: "View AI Review" },
   "ai.run": {
     vi: "Chạy phân tích AI",

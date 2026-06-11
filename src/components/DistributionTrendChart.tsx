@@ -34,10 +34,11 @@ export default function DistributionTrendChart({ data, labels }: DistributionTre
         <YAxis yAxisId="left" tick={{ fontSize: 10 }} allowDecimals={false} width={36} />
         <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10 }} width={44} />
         <Tooltip
-          formatter={(value: number, name: string) => [
-            name === labels.games ? value : formatNumber(value),
-            name,
-          ]}
+          formatter={(value, name) => {
+            const n = String(name ?? "");
+            const num = typeof value === "number" ? value : Number(value ?? 0);
+            return [n === labels.games ? num : formatNumber(num), n];
+          }}
         />
         <Legend wrapperStyle={{ fontSize: 11 }} />
         <Line
