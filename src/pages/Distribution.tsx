@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState, type ReactNode } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import {
   BarChart3,
@@ -68,9 +69,25 @@ export default function Distribution() {
     queryFn: fetchDistributionMeta,
   });
 
-  const [year, setYear] = useState<number | null | "pending">("pending");
-  const [month, setMonth] = useState<number | null>(null);
-  const [tab, setTab] = useState<DistributionTab>("reserve");
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const [year, setYear] = useState<number | null | "pending">(() => {
+    const y = searchParams.get("year");
+    if (y == null) return "pending";
+    if (y === "all") return null;
+    const n = Number(y);
+    return Number.isFinite(n) ? n : "pending";
+  });
+  const [month, setMonth] = useState<number | null>(() => {
+    const m = searchParams.get("month");
+    if (m == null || m === "all") return null;
+    const n = Number(m);
+    return Number.isFinite(n) ? n : null;
+  });
+  const [tab, setTab] = useState<DistributionTab>(() => {
+    const tParam = searchParams.get("tab");
+    return TAB_CONFIG.some((c) => c.id === tParam) ? (tParam as DistributionTab) : "reserve";
+  });
 
   useEffect(() => {
     if (meta?.years.length && year === "pending") {
@@ -79,6 +96,22 @@ export default function Distribution() {
   }, [meta, year]);
 
   const resolvedYear = year === "pending" ? null : year;
+
+  // Sync filters into the URL so a copied link reproduces the same distribution view.
+  useEffect(() => {
+    if (year === "pending") return;
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.set("tab", tab);
+        next.set("year", year == null ? "all" : String(year));
+        if (month == null) next.delete("month");
+        else next.set("month", String(month));
+        return next;
+      },
+      { replace: true },
+    );
+  }, [year, month, tab, setSearchParams]);
 
   const { data, isLoading, isFetching, isError, error, refetch } = useQuery({
     queryKey: ["distribution-overview", resolvedYear, month, tab],
