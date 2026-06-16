@@ -1,7 +1,8 @@
 import { useState, useRef, useCallback } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useContentLang } from "@/lib/content-language";
-import { localizeAnalysisToEn, getSummaryBullets, mainAnalysisScore } from "@/lib/analysis-localize";
+import { getSummaryBullets, mainAnalysisScore } from "@/lib/analysis-localize";
+import { analysisDetailPath } from "@/lib/analysis-url";
 import ReviewWindowPicker from "@/components/ReviewWindowPicker";
 import AnalysisProgressPanel, {
   INITIAL_ANALYSIS_PROGRESS,
@@ -9,12 +10,19 @@ import AnalysisProgressPanel, {
   type AnalysisProgressState,
 } from "@/components/AnalysisProgressPanel";
 import type { AnalysisProgressUpdate } from "@/lib/analysis-stream";
-import AnalysisDetailModal from "@/components/AnalysisDetailModal";
 import AnalysisSourceBadge from "@/components/AnalysisSourceBadge";
 import StoreLinkChips from "@/components/StoreLinkChips";
 import { analysisStoreLinks } from "@/lib/store-links";
 import { Brain, Search, Sparkles, ExternalLink, Trash2, Globe, Upload, FileSpreadsheet, X } from "lucide-react";
-import { triggerExternalAnalysis, triggerCsvAnalysis, deleteAnalysis, fetchAllAnalyses } from "@/services/api";
+import {
+  triggerExternalAnalysis,
+  triggerCsvAnalysis,
+  deleteAnalysis,
+  fetchAllAnalyses,
+  type AnalysisListScope,
+} from "@/services/api";
+import { useAuth } from "@/contexts/AuthContext";
+import { hasPermission } from "@/lib/permissions";
 import { cn, getScoreColor } from "@/lib/utils";
 import { useUiCopy } from "@/lib/use-ui-copy";
 import { DEFAULT_REVIEW_WINDOW, type ReviewWindow } from "@/types/review-window";
@@ -25,27 +33,19 @@ export default function AIAnalysisPage() {
   const [externalPlatform, setExternalPlatform] = useState<"taptap" | "steam">("taptap");
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [reviewWindow, setReviewWindow] = useState<ReviewWindow>(DEFAULT_REVIEW_WINDOW);
-  const [modalAnalysis, setModalAnalysis] = useState<AiAnalysis | null>(null);
   const [analysisProgress, setAnalysisProgress] =
     useState<AnalysisProgressState>(INITIAL_ANALYSIS_PROGRESS);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
-  const { lang: contentLang } = useContentLang();
+  const navigate = useNavigate();
   const { t } = useUiCopy();
-
-  const { data: modalLocalized } = useQuery({
-    queryKey: ["ai-analysis-localized", modalAnalysis?.appId, modalAnalysis?.analyzedAt, contentLang],
-    queryFn: () => localizeAnalysisToEn(modalAnalysis!),
-    enabled: !!modalAnalysis && contentLang === "en",
-    staleTime: 86_400_000,
-  });
-
-  const modalView =
-    modalAnalysis && contentLang === "en" ? (modalLocalized ?? modalAnalysis) : modalAnalysis;
+  const { user } = useAuth();
+  const canDelete = hasPermission(user, "ai.delete");
+  const [listScope, setListScope] = useState<AnalysisListScope>("all");
 
   const { data: savedAnalyses = [] } = useQuery({
-    queryKey: ["all-analyses"],
-    queryFn: fetchAllAnalyses,
+    queryKey: ["all-analyses", listScope],
+    queryFn: () => fetchAllAnalyses(listScope),
     staleTime: 30_000,
   });
 
@@ -62,7 +62,8 @@ export default function AIAnalysisPage() {
     onMutate: () => setAnalysisProgress(INITIAL_ANALYSIS_PROGRESS),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["all-analyses"] });
-      setModalAnalysis(data);
+      setListScope("mine");
+      navigate(analysisDetailPath(data));
     },
   });
 
@@ -71,8 +72,9 @@ export default function AIAnalysisPage() {
     onMutate: () => setAnalysisProgress(INITIAL_ANALYSIS_PROGRESS),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["all-analyses"] });
-      setModalAnalysis(data);
+      setListScope("mine");
       setCsvFile(null);
+      navigate(analysisDetailPath(data));
     },
   });
 
@@ -97,12 +99,13 @@ export default function AIAnalysisPage() {
     }
   };
 
-  const handleDelete = (idx: number) => {
-    const a = savedAnalyses[idx];
-    if (!a?.analyzedAt) return;
+  const canDeleteAnalysis = (a: AiAnalysis) =>
+    canDelete && !!user?.id && a.analyzedByUserId === user.id;
+
+  const handleDelete = (a: AiAnalysis) => {
+    if (!a?.analyzedAt || !canDeleteAnalysis(a)) return;
     deleteAnalysis(a.appId, a.analyzedAt).then(() => {
       queryClient.invalidateQueries({ queryKey: ["all-analyses"] });
-      if (modalAnalysis?.analyzedAt === a.analyzedAt) setModalAnalysis(null);
     }).catch(() => {});
   };
 
@@ -225,17 +228,41 @@ export default function AIAnalysisPage() {
       </div>
 
       <div>
-        <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide mb-3">
-          {t("Kết quả", "Results")} ({savedAnalyses.length})
-        </h2>
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-3">
+          <h2 className="font-semibold text-sm text-muted-foreground uppercase tracking-wide">
+            {t("Kết quả", "Results")} ({savedAnalyses.length})
+          </h2>
+          <div className="inline-flex rounded-lg border border-border p-0.5 text-xs">
+            <button
+              type="button"
+              onClick={() => setListScope("all")}
+              className={cn(
+                "px-3 py-1.5 rounded-md font-medium transition-colors",
+                listScope === "all" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {t("Tất cả phân tích", "All analyses")}
+            </button>
+            <button
+              type="button"
+              onClick={() => setListScope("mine")}
+              className={cn(
+                "px-3 py-1.5 rounded-md font-medium transition-colors",
+                listScope === "mine" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {t("Phân tích của tôi", "My analyses")}
+            </button>
+          </div>
+        </div>
         {savedAnalyses.length === 0 ? (
           <div className="bg-card rounded-xl border border-border p-8 text-center text-muted-foreground text-sm">
             {t("Chưa có phân tích. Chạy phân tích phía trên.", "No analyses yet. Run one above.")}
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {savedAnalyses.map((a, idx) => (
-              <div key={`${a.appId}-${a.analyzedAt}`} className="bg-card rounded-xl border border-border p-4 flex flex-col gap-3">
+            {savedAnalyses.map((a) => (
+              <div key={`${a.appId}-${a.analyzedAt}-${a.analyzedByUserId ?? ""}`} className="bg-card rounded-xl border border-border p-4 flex flex-col gap-3">
                 <div className="flex items-start gap-3">
                   {a.iconUrl ? (
                     <img src={a.iconUrl} alt="" className="w-11 h-11 rounded-lg object-cover" referrerPolicy="no-referrer" />
@@ -273,21 +300,22 @@ export default function AIAnalysisPage() {
                   {getSummaryBullets(a)[0] ?? a.summary}
                 </p>
                 <div className="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setModalAnalysis(a)}
-                    className="flex-1 px-3 py-2 text-xs rounded-lg bg-primary text-primary-foreground font-medium"
+                  <Link
+                    to={analysisDetailPath(a)}
+                    className="flex-1 px-3 py-2 text-xs rounded-lg bg-primary text-primary-foreground font-medium text-center"
                   >
                     {t("Chi tiết đánh giá", "Evaluation details")}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => handleDelete(idx)}
-                    className="p-2 rounded-lg border hover:bg-red-500/10 hover:text-red-500"
-                    title={t("Xóa", "Delete")}
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                  </Link>
+                  {canDeleteAnalysis(a) && (
+                    <button
+                      type="button"
+                      onClick={() => handleDelete(a)}
+                      className="p-2 rounded-lg border hover:bg-red-500/10 hover:text-red-500"
+                      title={t("Xóa", "Delete")}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
@@ -295,7 +323,6 @@ export default function AIAnalysisPage() {
         )}
       </div>
 
-      <AnalysisDetailModal analysis={modalView} onClose={() => setModalAnalysis(null)} />
     </div>
   );
 }

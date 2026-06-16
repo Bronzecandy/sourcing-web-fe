@@ -41,6 +41,10 @@ export function potentialRadarMetric(metric: string, lang: ContentLang): string 
     Stability: ["Ổn định xếp hạng", "Stability"],
     Charts: ["BXH Launch", "Launch Charts"],
     PreLaunch: ["Reserve trước launch", "Pre-launch Reserve"],
+    Audience: ["Quy mô & tăng trưởng", "Scale & Growth"],
+    Rating: ["Đánh giá", "Rating"],
+    RankQuality: ["Chất lượng hạng", "Rank Quality"],
+    LaunchBoard: ["BXH Launch", "Launch Charts"],
   };
   const p = pairs[metric];
   if (!p) return metric;

@@ -250,8 +250,16 @@ export default function Distribution() {
           </button>
         </div>
       ) : isLoading ? (
-        <div className="flex items-center justify-center h-64">
+        <div className="flex flex-col items-center justify-center h-64 gap-3">
           <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary" />
+          {resolvedYear == null && month == null && (
+            <p className="text-sm text-muted-foreground text-center max-w-md px-4">
+              {t(
+                "Lần đầu tải Tất cả có thể mất vài phút (đang tính cohort). Lần sau sẽ nhanh nhờ cache.",
+                "First all-time load may take a few minutes (building cohort). Later loads use cache.",
+              )}
+            </p>
+          )}
         </div>
       ) : !data ? null : (
         <>

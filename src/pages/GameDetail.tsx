@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
@@ -8,7 +8,7 @@ import {
 import { ArrowLeft, Brain, Star, Users, Heart, MessageSquare, TrendingUp, Activity, Shield, Database, History, ChevronDown, ChevronUp, Trash2, Sparkles, Calendar, Download, LayoutGrid, Bookmark } from "lucide-react";
 import { fetchGameDetail, fetchGameReviews, triggerAnalysis, fetchGamePotentialBreakdown, fetchLatestAnalysis, fetchAnalysisHistory, deleteAnalysis } from "@/services/api";
 import { useContentLang } from "@/lib/content-language";
-import { localizeAnalysisToEn, getSummaryBullets, mainAnalysisScore } from "@/lib/analysis-localize";
+import { getSummaryBullets, mainAnalysisScore } from "@/lib/analysis-localize";
 import ReviewWindowPicker from "@/components/ReviewWindowPicker";
 import AnalysisProgressPanel, {
   INITIAL_ANALYSIS_PROGRESS,
@@ -18,8 +18,8 @@ import AnalysisProgressPanel, {
 import type { AnalysisProgressUpdate } from "@/lib/analysis-stream";
 import HistoryRangePicker from "@/components/HistoryRangePicker";
 import type { HistoryRange } from "@/types/history-range";
-import AnalysisDetailModal from "@/components/AnalysisDetailModal";
 import AnalysisSourceBadge from "@/components/AnalysisSourceBadge";
+import { analysisDetailPath } from "@/lib/analysis-url";
 import StoreLinkChips from "@/components/StoreLinkChips";
 import { analysisStoreLinks, gameStoreLinks } from "@/lib/store-links";
 import { DEFAULT_REVIEW_WINDOW, type ReviewWindow } from "@/types/review-window";
@@ -101,9 +101,10 @@ export default function GameDetail() {
   const analysisMutation = useMutation({
     mutationFn: () => triggerAnalysis(appId, reviewWindow, onAnalysisProgress),
     onMutate: () => setAnalysisProgress(INITIAL_ANALYSIS_PROGRESS),
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["ai-analysis", appId] });
       queryClient.invalidateQueries({ queryKey: ["ai-analysis-history", appId] });
+      navigate(analysisDetailPath(data));
     },
   });
 
@@ -252,6 +253,7 @@ export default function GameDetail() {
           onReviewWindowChange={setReviewWindow}
           canRun={canAiRun}
           canDelete={canAiDelete}
+          currentUserId={user?.id}
         />
       )}
 
@@ -426,6 +428,7 @@ function AIAnalysisSection({
   onReviewWindowChange,
   canRun,
   canDelete,
+  currentUserId,
 }: {
   analysisResult: AiAnalysis | undefined;
   analysisMutation: { mutate: () => void; isPending: boolean; isError: boolean; error: Error | null };
@@ -435,25 +438,14 @@ function AIAnalysisSection({
   onReviewWindowChange: (w: ReviewWindow) => void;
   canRun: boolean;
   canDelete: boolean;
+  currentUserId?: string;
 }) {
   const [showHistory, setShowHistory] = useState(false);
-  const [modalAnalysis, setModalAnalysis] = useState<AiAnalysis | null>(null);
   const queryClient = useQueryClient();
-  const { lang: contentLang } = useContentLang();
   const { t } = useUiCopy();
   const appId = analysisResult?.appId ?? history[0]?.appId ?? 0;
 
   const overview = analysisResult;
-
-  const { data: modalLocalized } = useQuery({
-    queryKey: ["ai-analysis-localized", modalAnalysis?.appId, modalAnalysis?.analyzedAt, contentLang],
-    queryFn: () => localizeAnalysisToEn(modalAnalysis!),
-    enabled: !!modalAnalysis && contentLang === "en",
-    staleTime: 86_400_000,
-  });
-
-  const modalView =
-    modalAnalysis && contentLang === "en" ? (modalLocalized ?? modalAnalysis) : modalAnalysis;
 
   const handleDelete = async (analyzedAt: string) => {
     if (!confirm(t("Xóa phân tích này?", "Delete this analysis?"))) return;
@@ -461,17 +453,28 @@ function AIAnalysisSection({
       await deleteAnalysis(appId, analyzedAt);
       queryClient.invalidateQueries({ queryKey: ["ai-analysis", appId] });
       queryClient.invalidateQueries({ queryKey: ["ai-analysis-history", appId] });
-      if (modalAnalysis?.analyzedAt === analyzedAt) setModalAnalysis(null);
     } catch { /* ignore */ }
   };
 
+  const canDeleteItem = (h: AiAnalysis) =>
+    canDelete && !!currentUserId && h.analyzedByUserId === currentUserId;
+  const ownHistory = history.filter((h) => h.analyzedByUserId === currentUserId);
+
   const handleDeleteAll = async () => {
-    if (!confirm(t(`Xóa tất cả ${history.length} phân tích của game này?`, `Delete all ${history.length} analyses for this game?`))) return;
+    if (ownHistory.length === 0) return;
+    if (
+      !confirm(
+        t(
+          `Xóa ${ownHistory.length} phân tích của bạn cho game này?`,
+          `Delete your ${ownHistory.length} analyses for this game?`,
+        ),
+      )
+    )
+      return;
     try {
       await deleteAnalysis(appId);
       queryClient.invalidateQueries({ queryKey: ["ai-analysis", appId] });
       queryClient.invalidateQueries({ queryKey: ["ai-analysis-history", appId] });
-      setModalAnalysis(null);
       setShowHistory(false);
     } catch { /* ignore */ }
   };
@@ -567,14 +570,13 @@ function AIAnalysisSection({
                   <span className={cn("font-bold tabular-nums shrink-0", getScoreColor(mainAnalysisScore(h)))}>
                     {mainAnalysisScore(h)}
                   </span>
-                  <button
-                    type="button"
-                    onClick={() => setModalAnalysis(h)}
+                  <Link
+                    to={analysisDetailPath(h)}
                     className="px-2 py-1 rounded-md bg-primary/10 text-primary text-[10px] font-medium shrink-0"
                   >
                     {t("Chi tiết", "Details")}
-                  </button>
-                  {canDelete && (
+                  </Link>
+                  {canDeleteItem(h) && (
                     <button
                       type="button"
                       onClick={() => h.analyzedAt && handleDelete(h.analyzedAt)}
@@ -586,10 +588,10 @@ function AIAnalysisSection({
                 </div>
               ))}
             </div>
-            {canDelete && history.length > 1 && (
+            {canDelete && ownHistory.length > 1 && (
               <div className="px-3 py-2 border-t border-border/50 bg-muted/30">
                 <button type="button" onClick={handleDeleteAll} className="text-xs text-red-500 hover:text-red-600 flex items-center gap-1">
-                  <Trash2 className="w-3 h-3" /> {t("Xóa tất cả phân tích", "Delete all analyses")}
+                  <Trash2 className="w-3 h-3" /> {t("Xóa phân tích của tôi", "Delete my analyses")}
                 </button>
               </div>
             )}
@@ -624,18 +626,16 @@ function AIAnalysisSection({
             <p className="text-sm text-muted-foreground line-clamp-3">
               {getSummaryBullets(overview)[0] ?? overview.summary}
             </p>
-            <button
-              type="button"
-              onClick={() => setModalAnalysis(overview)}
-              className="px-4 py-2 text-xs rounded-lg bg-primary text-primary-foreground font-medium"
+            <Link
+              to={analysisDetailPath(overview)}
+              className="inline-block px-4 py-2 text-xs rounded-lg bg-primary text-primary-foreground font-medium"
             >
               {t("Xem chi tiết đánh giá", "View evaluation details")}
-            </button>
+            </Link>
           </div>
         )}
       </div>
 
-      <AnalysisDetailModal analysis={modalView} onClose={() => setModalAnalysis(null)} />
     </>
   );
 }
@@ -732,21 +732,26 @@ function PotentialSection({
 }) {
   const { t, lang } = useUiCopy();
   const isLaunch = variant === "launched";
-  const wMom = isLaunch ? 0.22 : 0.2;
-  const wEng = isLaunch ? 0.45 : 0.6;
-  const wStab = isLaunch ? 0.13 : 0.2;
+  const wAudience = isLaunch ? 0.45 : 0.65;
+  const wRating = isLaunch ? 0.15 : 0.25;
+  const wRank = isLaunch ? 0.2 : 0.1;
   const wBoard = isLaunch ? 0.15 : 0;
   const wPre = isLaunch ? 0.05 : 0;
+
+  const scaleMetricLabel = (metric: "reserve" | "download") =>
+    metric === "download" ? t("lượt tải", "downloads") : t("đăng ký trước", "pre-registrations");
+
   const radarData = useMemo(() => {
     if (!detail) return [];
+    const aud = detail.audience ?? detail.scale;
     const items = [
-      { metric: potentialRadarMetric("Momentum", lang), value: detail.momentum.score },
-      { metric: potentialRadarMetric("Engagement", lang), value: detail.engagement.score },
-      { metric: potentialRadarMetric("Stability", lang), value: detail.stability.score },
+      { metric: potentialRadarMetric("Audience", lang), value: aud?.score ?? 0 },
+      { metric: potentialRadarMetric("Rating", lang), value: detail.rating.score },
+      { metric: potentialRadarMetric("RankQuality", lang), value: detail.rankQuality.score },
     ];
     if (isLaunch) {
       items.push({
-        metric: potentialRadarMetric("Charts", lang),
+        metric: potentialRadarMetric("LaunchBoard", lang),
         value: detail.launchBoard?.score ?? 0,
       });
       items.push({
@@ -757,16 +762,16 @@ function PotentialSection({
     return items;
   }, [detail, lang, isLaunch]);
 
-  const m = detail?.momentum;
-  const e = detail?.engagement;
-  const st = detail?.stability;
+  const aud = detail?.audience ?? detail?.scale;
+  const ra = detail?.rating;
+  const rq = detail?.rankQuality;
   const lb = detail?.launchBoard;
   const preScore = detail?.preLaunchScore ?? 0;
   const preRaw = detail?.preLaunchBonus ?? 0;
-  const momL = potentialRadarMetric("Momentum", lang);
-  const engL = potentialRadarMetric("Engagement", lang);
-  const stabL = potentialRadarMetric("Stability", lang);
-  const boardL = potentialRadarMetric("Charts", lang);
+  const audienceL = potentialRadarMetric("Audience", lang);
+  const ratingL = potentialRadarMetric("Rating", lang);
+  const rankL = potentialRadarMetric("RankQuality", lang);
+  const boardL = potentialRadarMetric("LaunchBoard", lang);
   const preL = potentialRadarMetric("PreLaunch", lang);
   const fmtContrib = (score: number, w: number) => (score * w).toFixed(1);
 
@@ -781,14 +786,17 @@ function PotentialSection({
           )}
         </p>
       )}
-      {isLaunch && (
-        <p className="text-xs text-muted-foreground mb-4 -mt-2">
-          {t(
-            "Chỉ tính từ ngày xuất hiện trên Hot/Pop/New. Điểm thô tối đa 100 — BXH Launch gồm 3 phần: vị thế hôm nay, độ bền theo ngày, phủ BXH.",
-            "Scores from Hot/Pop/New days only. Raw max 100 — Launch charts = today's position + day consistency + chart coverage.",
-          )}
-        </p>
-      )}
+      <p className="text-xs text-muted-foreground mb-4 -mt-2">
+        {isLaunch
+          ? t(
+              "3 trụ chính + BXH Launch + bonus Reserve. Quy mô & tăng trưởng gộp một mốc: base theo tier Phân phối, tăng chậm được dung hoà khi quy mô đã lớn.",
+              "3 main pillars + Launch charts + pre-launch bonus. Audience merges scale + growth: Distribution tier base, slow growth forgiven when already large.",
+            )
+          : t(
+              "3 trụ: Quy mô & tăng trưởng (gộp), Đánh giá, Chất lượng hạng. Rating giữ điểm cao khi ổn định ở mức tốt; game lớn không bị trừ nặng vì tăng chậm.",
+              "3 pillars: Audience (merged), Rating, Rank Quality. Rating stays high when stable at a good level; large games aren't heavily penalized for slow growth.",
+            )}
+      </p>
 
       {!detail ? (
         <p className="text-muted-foreground text-sm text-center py-8">{emptyHint}</p>
@@ -821,19 +829,27 @@ function PotentialSection({
               <div className="bg-muted/20 rounded-lg px-3 py-2 text-[10px] text-muted-foreground space-y-1">
                 <p>
                   <span className="font-medium text-foreground">{t("Thô", "Raw")}</span>{" "}
-                  = {momL}×{wMom} + {engL}×{wEng} + {stabL}×{wStab}
-                  {isLaunch
-                    ? t(
-                        ` + ${boardL}×${wBoard} + ${preL}×${wPre}`,
-                        ` + ${boardL}×${wBoard} + ${preL}×${wPre}`,
-                      )
-                    : ""}
-                  {isLaunch ? t(" — tối đa 100", " — max 100") : ""}
+                  = {audienceL}×{wAudience} + {ratingL}×{wRating} + {rankL}×{wRank}
+                  {isLaunch ? ` + ${boardL}×${wBoard} + ${preL}×${wPre}` : ""}
+                </p>
+                <p>
+                  {t(
+                    "Trụ thiếu dữ liệu sẽ bị bỏ và chia lại trọng số cho các trụ còn lại (không tính 0).",
+                    "Pillars with no data are dropped and weights renormalized over the rest (not scored as 0).",
+                  )}
                 </p>
                 <p>
                   <span className="font-medium text-foreground">{t("Cuối", "Final")}</span>{" "}
                   = {t("Thô", "Raw")} × {t("hệ số tin cậy", "Confidence multiplier")} ({detail.rawComposite} × {detail.confidence.multiplier} = {detail.compositeScore})
                 </p>
+                {detail.floorApplied && (
+                  <p className="text-amber-700 dark:text-amber-400">
+                    {t(
+                      "Đã áp sàn: hạng BXH không được kéo điểm thô xuống dưới (Quy mô & Đánh giá) − 2 khi cả hai trụ đủ mạnh.",
+                      "Floor applied: chart rank cannot drag raw score below (Audience + Rating) core − 2 when both pillars are strong.",
+                    )}
+                  </p>
+                )}
                 <p>
                   {t(
                     `Tin cậy = độ phủ dữ liệu (${detail.confidence.coverage}%), hệ số ×0.3 đến ×1.0. Càng nhiều ngày dữ liệu thì tin cậy càng cao.`,
@@ -844,259 +860,206 @@ function PotentialSection({
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {m && <FactorCard
-              icon={<TrendingUp className="w-4 h-4" />}
-              label={momL}
-              weight={`${wMom * 100}%`}
-              score={m.score}
-              description={
-                isLaunch
-                  ? t(
-                      "Blend momentum Pop 50% > Hot 30% > New 20% (chi tiết hạng theo BXH ưu tiên).",
-                      "Blended momentum Pop 50% > Hot 30% > New 20% (rank detail uses priority board).",
-                    )
-                  : t(
-                      "Vị trí xếp hạng hiện tại + biến động xếp hạng + đỉnh cao giai đoạn.",
-                      "Current rank position + rank movement + peak performance.",
-                    )
-              }
-              rows={[
-                {
-                  label: t("Vị trí trung bình", "Average Position"),
-                  badge: "50%",
-                  value: t(`Hạng TB cả kỳ #${m.avgRank ?? m.avgRecentRank}`, `Full-period avg #${m.avgRank ?? m.avgRecentRank}`),
-                  points: m.positionScore,
-                  help: t(
-                    "Lấy hạng trung bình trong toàn bộ cửa sổ phân tích — game giữ vị thí tốt suốt kỳ được điểm cao, không chỉ nhờ vài ngày cuối.",
-                    "Uses the average rank across the full analysis window — consistent strong placement scores higher, not just a good finish.",
-                  ),
-                  formula: `100 − ${m.avgRank ?? m.avgRecentRank} × 0.5 = ${m.positionScore}`,
-                },
-                {
-                  label: t("Thay đổi xếp hạng", "Rank Change"),
-                  badge: "25%",
-                  value: `#${m.rankStart} → #${m.rankEnd} (${m.change >= 0 ? "+" : ""}${m.change})`,
-                  points: m.rankChangeScore,
-                  help: t(
-                    "Leo hạng được thưởng. Giữ top (#1 ổn định = điểm tối đa; tụt nhẹ trong top 10 như #1→#5 vẫn cao) nhờ điểm duy trì — không phạt game đã ở đỉnh vì không leo thêm được.",
-                    "Climbing earns points. Holding the top (#1 stable = max; slight slips within top 10 like #1→#5 still score high) via maintenance score — games already at the peak aren't penalized for not climbing further.",
-                  ),
-                  formula: t(
-                    `max(leo ${m.climbScore ?? "—"}, duy trì ${m.maintenanceScore ?? "—"}) = ${m.rankChangeScore}`,
-                    `max(climb ${m.climbScore ?? "—"}, maintenance ${m.maintenanceScore ?? "—"}) = ${m.rankChangeScore}`,
-                  ),
-                },
-                {
-                  label: t("Đỉnh giai đoạn", "Peak Performance"),
-                  badge: "25%",
-                  value: t(`Hạng tốt nhất #${m.bestRank}`, `Best rank #${m.bestRank}`),
-                  points: m.peakScore,
-                  help: t(
-                    "Ghi nhận đỉnh cao nhất trong kỳ — game từng chạm top dù hiện tại hơi tụt vẫn có điểm. Giúp không bỏ sót game có giai đoạn bứt phá rồi ổn định ở hạng khá.",
-                    "Records the best rank in the period — a game that peaked high but dipped slightly still gets credit. This catches games that broke out then settled at a decent rank.",
-                  ),
-                  formula: `100 − ${m.bestRank} × 0.5 = ${m.peakScore}`,
-                },
-                {
-                  label: t("Tổng", "Total"),
-                  isTotal: true,
-                  value: t("Trung bình có trọng số 3 mục trên", "Weighted average of the three items above"),
-                  points: m.score,
-                  help: t(
-                    "Gộp 3 mục trên theo trọng số 50/25/25 vì vị thế hiện tại quan trọng nhất, nhưng xu hướng leo/tụt và đỉnh kỳ vẫn cho bức tranh đầy đủ.",
-                    "Combines the three items at 50/25/25 weights because current position matters most, but climb direction and period peak complete the picture.",
-                  ),
-                },
-              ]}
-            />}
-            {e && (() => {
-              const engMetricCount =
-                (e.ratingScore != null ? 1 : 0) +
-                (e.fansScore != null ? 1 : 0) +
-                (!isLaunch && e.resScore != null ? 1 : 0) +
-                (isLaunch && e.dlScore != null ? 1 : 0);
-              const engBadge = engMetricCount > 0 ? `${Math.round(100 / engMetricCount)}%` : undefined;
-              return (
-                <FactorCard
-                  icon={<Activity className="w-4 h-4" />}
-                  label={engL}
-                  weight={`${wEng * 100}%`}
-                  score={e.score}
-                  description={
-                    isLaunch
-                      ? t(
-                          "Người chơi có quan tâm không? Gồm sao, fan và lượt tải — trung bình các mục có dữ liệu.",
-                          "Are players engaged? Star rating, fans, and downloads — averaged across available metrics.",
-                        )
-                      : t(
-                          "Người chơi có quan tâm không? Gồm sao, fan và đăng ký trước — trung bình các mục có dữ liệu.",
-                          "Are players engaged? Star rating, fans, and pre-registrations — averaged across available metrics.",
-                        )
-                  }
-                  rows={[
-                    ...(e.ratingScore != null
-                      ? [{
-                          label: t("Điểm sao", "Rating"),
-                          badge: engBadge,
-                          value: `${e.ratingEnd} ★ (${e.ratingDelta >= 0 ? "+" : ""}${e.ratingDelta})`,
-                          points: e.ratingScore,
-                          help: t(
-                            "Sao phản ánh chất lượng thực tế từ người chơi. Cho điểm cả mức sao hiện tại (cao = tốt) và biến động (tăng sao = đang được đón nhận hơn) vì một game 8★ và đang lên 8.5★ khác với game 8★ đứng yên.",
-                            "Star rating reflects real player quality. Scores both the current level (higher = better) and change (rising stars = growing approval) — 8★ and climbing differs from a flat 8★.",
-                          ),
-                          formula: `${e.ratingBaseScore} × 0.6 + ${e.ratingChangeScore} × 0.4 = ${e.ratingScore}`,
-                        }]
-                      : [{
-                          label: t("Điểm sao", "Rating"),
-                          value: t("Chưa đủ dữ liệu", "Not enough data"),
-                          help: t(
-                            "Chưa đủ dữ liệu qua nhiều ngày nên không thể đánh giá xu hướng sao một cách đáng tin.",
-                            "Not enough multi-day data to judge rating trends reliably.",
-                          ),
-                        }]),
-                    ...(e.fansScore != null
-                      ? [{
-                          label: t("Tăng fan", "Fans Growth"),
-                          badge: engBadge,
-                          value: `+${formatNumber(e.fansGrowth)}`,
-                          points: e.fansScore,
-                          help: t(
-                            "Fan = cộng đồng quan tâm dài hạn. Lấy điểm tốt hơn giữa % tăng và số lượng tăng vì game nhỏ có thể tăng % cao, game lớn tăng số tuyệt đối lớn — cả hai đều là tín hiệu tích cực.",
-                            "Fans signal long-term community interest. Uses the better of % growth or absolute growth — small games can spike in %, big games in volume; both are positive signals.",
-                          ),
-                          formula: t(
-                            `Tốt hơn: ${e.fansRateScore} (% tăng) / ${e.fansAbsScore} (khối lượng) → ${e.fansScore}`,
-                            `Best of ${e.fansRateScore} (% growth) / ${e.fansAbsScore} (volume) → ${e.fansScore}`,
-                          ),
-                        }]
-                      : [{
-                          label: t("Tăng fan", "Fans Growth"),
-                          value: t("Chưa đủ dữ liệu", "Not enough data"),
-                          help: t(
-                            "Cần mốc fan ban đầu đủ lớn (≥100) để % tăng trưởng có ý nghĩa — tránh game 10→50 fan bị tính như tăng 400% nhưng thực tế quá nhỏ.",
-                            "Needs a meaningful fan base (≥100) at start so % growth isn't misleading — 10→50 fans is 400% but too small to matter.",
-                          ),
-                        }]),
-                    ...(!isLaunch
-                      ? e.resScore != null
-                        ? [{
-                            label: t("Tăng đăng ký trước", "Reserve Growth"),
-                            badge: engBadge,
-                            value: `+${formatNumber(e.resGrowth)}`,
-                            points: e.resScore,
-                            help: t(
-                              "Đăng ký trước = người chơi chủ động đặt chỗ trước khi ra mắt. Tăng mạnh cho thấy hype thật trước launch — đây là phần Engagement quan trọng nhất với game chưa ra mắt.",
-                              "Pre-registrations mean players actively signed up before launch. Strong growth shows real pre-launch hype — the key engagement signal for unreleased games.",
-                            ),
-                            formula: t(
-                              `Tốt hơn: ${e.resRateScore} (% tăng) / ${e.resAbsScore} (khối lượng) → ${e.resScore}`,
-                              `Best of ${e.resRateScore} (% growth) / ${e.resAbsScore} (volume) → ${e.resScore}`,
-                            ),
-                          }]
-                        : [{
-                            label: t("Tăng đăng ký trước", "Reserve Growth"),
-                            value: t("Chưa đủ dữ liệu", "Not enough data"),
-                            help: t(
-                              "Cần ≥50 đăng ký ban đầu để đo tăng trưởng có ý nghĩa, tương tự ngưỡng fan.",
-                              "Needs ≥50 starting pre-registrations for meaningful growth measurement, similar to the fan threshold.",
-                            ),
-                          }]
-                      : []),
-                    ...(isLaunch && e.dlScore != null
-                      ? [{
-                          label: t("Tăng download", "Download Growth"),
-                          badge: engBadge,
-                          value: `+${formatNumber(e.dlGrowth ?? 0)}`,
-                          points: e.dlScore,
-                          help: t(
-                            "Download = người chơi thực sự cài game sau launch. Quan trọng hơn fan/reserve vì là hành vi chuyển đổi thật. Lấy % hoặc khối lượng tùy cái nào phản ánh tốt hơn quy mô game.",
-                            "Downloads mean players actually installed the game post-launch. More meaningful than fans alone — real conversion. Uses % or volume, whichever fits the game's scale.",
-                          ),
-                          formula: t(
-                            `Tốt hơn: ${e.dlRateScore} (% tăng) / ${e.dlAbsScore} (khối lượng) → ${e.dlScore}`,
-                            `Best of ${e.dlRateScore} (% growth) / ${e.dlAbsScore} (volume) → ${e.dlScore}`,
-                          ),
-                        }]
-                      : isLaunch
-                        ? [{
-                            label: t("Tăng download", "Download Growth"),
-                            value: t("Chưa đủ dữ liệu", "Not enough data"),
-                            help: t(
-                              "Chưa có đủ ngày theo dõi lượt tải để tính tăng trưởng.",
-                              "Not enough days of download tracking to measure growth.",
-                            ),
-                          }]
-                        : []),
-                    {
-                      label: t("Tổng", "Total"),
-                      isTotal: true,
-                      value: t(`Trung bình ${e.subsCount} mục có dữ liệu`, `Average of ${e.subsCount} available metrics`),
-                      points: e.score,
-                      help: t(
-                        "Trung bình các mục có dữ liệu — mục thiếu bỏ qua chứ không tính 0, vì thiếu data không đồng nghĩa game kém.",
-                        "Averages available metrics only — missing data is skipped, not scored as zero, because no data ≠ bad performance.",
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {aud && (
+              <FactorCard
+                icon={<Database className="w-4 h-4" />}
+                label={audienceL}
+                weight={`${Math.round(wAudience * 100)}%`}
+                score={aud.score}
+                description={t(
+                  `Gộp quy mô + tăng trưởng ${scaleMetricLabel(aud.metric)}. Base theo mốc Phân phối; bonus tăng trưởng được giảm trọng số khi base đã cao — game lớn tăng chậm không bị trừ nặng.`,
+                  `Merged ${scaleMetricLabel(aud.metric)} scale + growth. Base from Distribution tiers; growth bonus weighted down when base is high — large games with slow growth aren't heavily penalized.`,
+                )}
+                rows={[
+                  {
+                    label: t("Base quy mô", "Scale base"),
+                    badge: "tier",
+                    value:
+                      aud.end != null
+                        ? `${formatNumber(aud.end)}${aud.baseTierLabel ? ` (${aud.baseTierLabel})` : ""}`
+                        : t("Chưa có", "No data"),
+                    points: aud.baseValue,
+                    help: t(
+                      "Điểm nền theo mốc quy mô tuyệt đối (nội suy log): 2M+ ≈ 94đ, 3M+ ≈ 98đ, 1M–2M 80→94, … Không còn vách đứng giữa các mốc.",
+                      "Base points from absolute scale (log-interpolated): 2M+ ≈ 94pts, 3M+ ≈ 98pts, 1M–2M ramps 80→94, … No cliff jumps between tiers.",
+                    ),
+                  },
+                  {
+                    label: t("Bonus tăng trưởng", "Growth bonus"),
+                    badge: aud.growthTierLabel ?? undefined,
+                    value:
+                      aud.start != null && aud.end != null ? (
+                        <span className="block text-right">
+                          <span className="block">
+                            {formatNumber(aud.start)} → {formatNumber(aud.end)} (
+                            {aud.delta >= 0 ? "+" : ""}
+                            {formatNumber(aud.delta)})
+                          </span>
+                          {aud.growthBonus !== 0 && (
+                            <span className="block text-[10px] text-muted-foreground mt-0.5">
+                              {t(
+                                `Áp dụng: +${(aud.growthBonus * aud.growthWeight).toFixed(1)} đ (×${(aud.growthWeight * 100).toFixed(0)}% vì base cao)`,
+                                `Applied: +${(aud.growthBonus * aud.growthWeight).toFixed(1)} pts (×${(aud.growthWeight * 100).toFixed(0)}% due to high base)`,
+                              )}
+                            </span>
+                          )}
+                        </span>
+                      ) : (
+                        t("Chưa đủ dữ liệu", "Not enough data")
                       ),
-                    },
-                  ]}
-                />
-              );
-            })()}
-            {st && <FactorCard
-              icon={<Shield className="w-4 h-4" />}
-              label={stabL}
-              weight={`${wStab * 100}%`}
-              score={st.score}
-              description={t(
-                "Game có ổn định trong bảng xếp hạng không? Thưởng số ngày có mặt và độ dao động hạng thấp.",
-                "Is the game consistently ranked? Rewards daily presence with low rank fluctuation.",
-              )}
-              rows={[
-                {
-                  label: t("Hiện diện", "Presence"),
-                  badge: "50%",
-                  value: t(`${st.daysInTop}/${st.analysisDays} ngày Top 200`, `${st.daysInTop}/${st.analysisDays} days in Top 200`),
-                  points: st.presenceScore,
-                  help: t(
-                    "Game có mặt trên BXH càng nhiều ngày = càng bền, không phải may mắn 1–2 ngày. Đây là yếu tố quan trọng nhất của ổn định (50%).",
-                    "More days on chart = more durable presence, not a 1–2 day fluke. This is the most important stability factor (50%).",
-                  ),
-                  formula: `(${st.daysInTop} / ${st.analysisDays}) × 100 = ${st.presenceScore}`,
-                },
-                {
-                  label: t("Ít dao động", "Low Volatility"),
-                  badge: "30%",
-                  value: t(`Độ lệch ${st.stdDev}`, `Variation ${st.stdDev}`),
-                  points: st.volatilityScore,
-                  help: t(
-                    "Hạng nhảy mạnh ngày qua ngày = không ổn định, khó đánh giá tiềm năng. Dao động thấp cho thấy game giữ được vị thế đều đặn.",
-                    "Wild day-to-day rank swings mean instability and harder to trust. Low volatility shows the game holds its position steadily.",
-                  ),
-                  formula: `100 − ${st.stdDev} × 2 = ${st.volatilityScore}`,
-                },
-                {
-                  label: t("Chuỗi liên tiếp", "Streak"),
-                  badge: "20%",
-                  value: t(`${st.maxStreak} ngày`, `${st.maxStreak} days`),
-                  points: st.streakScore,
-                  help: t(
-                    "Chuỗi ngày liên tiếp trên chart bổ sung cho Hiện diện — phạt game kiểu lên-rớt-lên-rớt dù tổng ngày có thể tương đương.",
-                    "Consecutive days on chart complements Presence — penalizes on-off-on-off patterns even if total days look similar.",
-                  ),
-                  formula: `(${st.maxStreak} / ${st.analysisDays}) × 100 = ${st.streakScore}`,
-                },
-                {
-                  label: t("Tổng", "Total"),
-                  isTotal: true,
-                  value: t("Trung bình có trọng số 3 mục trên", "Weighted average of the three items above"),
-                  points: st.score,
-                  help: t(
-                    "Gộp hiện diện (50%), dao động (30%) và chuỗi ngày (20%) — ưu tiên game bền trên chart hơn game spike ngắn.",
-                    "Combines presence (50%), volatility (30%), and streak (20%) — favors durable chart presence over short spikes.",
-                  ),
-                },
-              ]}
-            />}
+                    points: aud.growthBonus,
+                    pointsTone: "bonus",
+                    help: t(
+                      "Số dương = cộng thêm theo mốc tốc độ tăng Phân phối. Với base lớn, chỉ một phần bonus được cộng vào điểm cuối.",
+                      "Positive = tier bonus from Distribution growth buckets. With a large base, only part of the bonus is added to the final score.",
+                    ),
+                    formula: t(
+                      `${aud.baseValue} + ${aud.growthBonus} × ${aud.growthWeight} = ${aud.score}`,
+                      `${aud.baseValue} + ${aud.growthBonus} × ${aud.growthWeight} = ${aud.score}`,
+                    ),
+                  },
+                  {
+                    label: t("Tổng", "Total"),
+                    isTotal: true,
+                    value: t("Base + bonus tăng trưởng (có dung hoà)", "Base + growth bonus (forgiven)"),
+                    points: aud.score,
+                  },
+                ]}
+              />
+            )}
+            {ra && (
+              <FactorCard
+                icon={<Star className="w-4 h-4" />}
+                label={ratingL}
+                weight={`${Math.round(wRating * 100)}%`}
+                score={ra.score}
+                description={t(
+                  "Base từ rating ĐẦU KỲ (8★→60, 10★→90) + ±5đ mỗi 0.1 thay đổi. Rating cao giữ nguyên không bị trừ vì không tăng thêm.",
+                  "Base from period-START rating (8★→60, 10★→90) + ±5pts per 0.1 change. High stable ratings aren't penalized for not climbing further.",
+                )}
+                rows={[
+                  {
+                    label: t("Base đầu kỳ", "Period-start base"),
+                    badge: "100%",
+                    value: ra.start != null ? `${ra.start} ★` : t("Chưa có", "No data"),
+                    points: ra.baseValue,
+                    help: t(
+                      "Điểm nền = (rating đầu kỳ − 5) × 15 + 15. Ví dụ 9.5★ → 82.5đ dù không đổi trong kỳ.",
+                      "Base = (start rating − 5) × 15 + 15. E.g. 9.5★ → 82.5pts even if unchanged in the window.",
+                    ),
+                    formula:
+                      ra.start != null
+                        ? `(${ra.start} − 5) × 15 + 15 = ${ra.baseValue}`
+                        : undefined,
+                  },
+                  {
+                    label: t("Điều chỉnh biến động", "Change adjustment"),
+                    badge: "±5/0.1",
+                    value:
+                      ra.start != null && ra.end != null
+                        ? ra.delta === 0
+                          ? t("Ổn định — không đổi", "Stable — no change")
+                          : `${ra.start} → ${ra.end} (${ra.delta >= 0 ? "+" : ""}${ra.delta})`
+                        : t("Ổn định", "Stable"),
+                    points: ra.deltaAdjustment,
+                    pointsTone: "delta",
+                    help: t(
+                      "Mỗi +0.1 rating cộng 5đ, mỗi −0.1 trừ 5đ. Không đổi = không cộng không trừ.",
+                      "+5pts per +0.1 rating, −5pts per −0.1. No change = no adjustment.",
+                    ),
+                    formula:
+                      ra.start != null && ra.delta !== 0
+                        ? `${ra.delta} / 0.1 × 5 = ${ra.deltaAdjustment >= 0 ? "+" : ""}${ra.deltaAdjustment}`
+                        : undefined,
+                  },
+                  {
+                    label: t("Tổng", "Total"),
+                    isTotal: true,
+                    value: t("Base + điều chỉnh", "Base + adjustment"),
+                    points: ra.score,
+                    formula:
+                      ra.start != null
+                        ? `${ra.baseValue} + ${ra.deltaAdjustment >= 0 ? "+" : ""}${ra.deltaAdjustment} = ${ra.score}`
+                        : undefined,
+                  },
+                ]}
+              />
+            )}
+            {rq && (
+              <FactorCard
+                icon={<Shield className="w-4 h-4" />}
+                label={rankL}
+                weight={`${Math.round(wRank * 100)}%`}
+                score={rq.score}
+                description={t(
+                  "Gộp vị thế hạng + độ ổn định vào MỘT trụ. Chấm theo bậc hạng (Top 10 = 100, Top 20 = 80, Top 50 = 55...) nên game lẹt đẹt hạng 50 không còn được tính như game top 10.",
+                  "Merges rank position + stability into ONE pillar. Scored by rank tiers (Top 10 = 100, Top 20 = 80, Top 50 = 55...) so a game stuck at #50 no longer counts like a top-10 game.",
+                )}
+                rows={[
+                  {
+                    label: t("Chất lượng vị thế", "Position quality"),
+                    badge: "40%",
+                    value: t(`Hạng TB #${rq.avgRank}`, `Avg rank #${rq.avgRank}`),
+                    points: rq.positionQuality,
+                    help: t(
+                      "Trung bình điểm-bậc theo từng ngày: Top 10→100, Top 20→80, Top 50→55, Top 100→30, Top 200→12. Duy trì hạng cao mới được điểm cao.",
+                      "Average per-day tier score: Top 10→100, Top 20→80, Top 50→55, Top 100→30, Top 200→12. Only consistently high ranks score high.",
+                    ),
+                  },
+                  {
+                    label: t("Có mặt Top 20", "Top-20 presence"),
+                    badge: "20%",
+                    value: `${rq.top20Rate}% (${t("Top10", "Top10")} ${rq.top10Rate}%)`,
+                    points: rq.presenceScore,
+                    help: t(
+                      "% số ngày nằm trong Top 20 — siết hơn cách cũ (Top 200) để chỉ thưởng game thực sự đứng cao.",
+                      "% of days inside Top 20 — stricter than the old Top-200 rule, rewarding only genuinely high placement.",
+                    ),
+                  },
+                  {
+                    label: t("Chuỗi Top 20", "Top-20 streak"),
+                    badge: "10%",
+                    value: t(`${rq.longestTop20Streak} ngày`, `${rq.longestTop20Streak} days`),
+                    points: rq.streakScore,
+                    help: t(
+                      "Chuỗi ngày liên tiếp trong Top 20 dài nhất — phạt kiểu lên-rớt-lên-rớt.",
+                      "Longest consecutive Top-20 streak — penalizes on-off-on-off patterns.",
+                    ),
+                  },
+                  {
+                    label: t("Ít dao động", "Low volatility"),
+                    badge: "10%",
+                    value: t(`Độ lệch ${rq.stdDev}`, `Variation ${rq.stdDev}`),
+                    points: rq.volatilityScore,
+                    help: t(
+                      "Hạng càng ít nhảy ngày qua ngày càng ổn định, dễ tin cậy.",
+                      "Steadier day-to-day rank = more stable and trustworthy.",
+                    ),
+                  },
+                  {
+                    label: t("Đà di chuyển", "Movement"),
+                    badge: "20%",
+                    value: `#${rq.rankStart} → #${rq.rankEnd} (${rq.change >= 0 ? "+" : ""}${rq.change})`,
+                    points: rq.movementScore,
+                    help: t(
+                      "Leo hạng được thưởng; giữ top ổn định vẫn điểm cao nhờ điểm duy trì — không phạt game đã ở đỉnh.",
+                      "Climbing is rewarded; holding the top still scores high via maintenance — games already at the peak aren't penalized.",
+                    ),
+                  },
+                  {
+                    label: t("Tổng", "Total"),
+                    isTotal: true,
+                    value: t("Vị thế 40 · Top20 20 · Chuỗi 10 · Dao động 10 · Đà 20", "Position 40 · Top20 20 · Streak 10 · Volatility 10 · Movement 20"),
+                    points: rq.score,
+                    help: t(
+                      "Gộp 5 phần trên: ưu tiên vị thế cao và ổn định bền vững, hạn chế thưởng game chỉ 'trụ' ở hạng thấp.",
+                      "Combines the five parts: favors high, durable placement and limits credit for merely lingering at low ranks.",
+                    ),
+                  },
+                ]}
+              />
+            )}
           </div>
 
           {isLaunch && (
@@ -1105,7 +1068,7 @@ function PotentialSection({
                 <FactorCard
                   icon={<LayoutGrid className="w-4 h-4" />}
                   label={boardL}
-                  weight={`${wBoard * 100}%`}
+                  weight={`${Math.round(wBoard * 100)}%`}
                   score={lb.score}
                   description={t(
                     "Game mạnh trên BXH Launch không? 3 câu hỏi: hôm nay ở BXH nào, có bền không, có nhiều BXH cùng lúc không.",
@@ -1133,10 +1096,7 @@ function PotentialSection({
                     {
                       label: t("Độ bền theo ngày", "Day consistency"),
                       badge: "25%",
-                      value: t(
-                        `Pop ${lb.popDayRate}% · Hot ${lb.hotDayRate}%`,
-                        `Pop ${lb.popDayRate}% · Hot ${lb.hotDayRate}%`,
-                      ),
+                      value: `Pop ${lb.popDayRate}% · Hot ${lb.hotDayRate}%`,
                       points: lb.consistency,
                       help: t(
                         "Xét % ngày có mặt trên từng BXH — Pop được trọng số cao nhất (60%) vì bền trên Pop quan trọng hơn chỉ lên New vài ngày.",
@@ -1177,7 +1137,7 @@ function PotentialSection({
               <FactorCard
                 icon={<Bookmark className="w-4 h-4" />}
                 label={preL}
-                weight={`${wPre * 100}%`}
+                weight={`${Math.round(wPre * 100)}%`}
                 score={preScore}
                 description={t(
                   "Trước khi lên Hot/Pop/New, Reserve có tăng mạnh không? Không có giai đoạn Reserve → 0 điểm.",
@@ -1187,7 +1147,7 @@ function PotentialSection({
                   {
                     label: t("Tăng Reserve trước launch", "Pre-launch reserve growth"),
                     badge: "100%",
-                    value: preRaw > 0 ? t(`Bonus +${preRaw.toFixed(1)}/3`, `Bonus +${preRaw.toFixed(1)}/3`) : t("Không có", "None"),
+                    value: preRaw > 0 ? `Bonus +${preRaw.toFixed(1)}/3` : t("Không có", "None"),
                     points: preScore,
                     help: preRaw > 0
                       ? t(
@@ -1236,11 +1196,47 @@ interface FactorRow {
   label: string;
   badge?: string;
   value: React.ReactNode;
-  /** Sub-score 0–100 shown on the right */
+  /** Numeric value in the right column */
   points?: number | null;
+  /**
+   * score = 0–100 pillar scale (green/yellow/red by level)
+   * bonus = additive tier bonus (+N, green if positive)
+   * delta = period change adjustment (+/−/0, neutral when zero)
+   */
+  pointsTone?: "score" | "bonus" | "delta";
   help?: string;
   formula?: string;
   isTotal?: boolean;
+}
+
+function rowPointsDisplay(
+  points: number,
+  tone: FactorRow["pointsTone"],
+): { text: string; className: string; suffix: string } {
+  if (tone === "bonus") {
+    const sign = points > 0 ? "+" : points < 0 ? "" : "";
+    return {
+      text: `${sign}${points.toFixed(0)}`,
+      className: points > 0 ? "text-up" : points < 0 ? "text-down" : "text-muted-foreground",
+      suffix: "",
+    };
+  }
+  if (tone === "delta") {
+    if (Math.abs(points) < 0.05) {
+      return { text: "±0", className: "text-muted-foreground", suffix: "" };
+    }
+    const sign = points > 0 ? "+" : "";
+    return {
+      text: `${sign}${points.toFixed(1)}`,
+      className: points > 0 ? "text-up" : "text-down",
+      suffix: "",
+    };
+  }
+  return {
+    text: points.toFixed(1),
+    className: getScoreColor(points),
+    suffix: "pts",
+  };
 }
 
 function FactorCard({ icon, label, weight, score, description, rows }: {
@@ -1299,14 +1295,19 @@ function FactorCard({ icon, label, weight, score, description, rows }: {
               <div className={cn("text-[11px] leading-snug", r.isTotal ? "text-muted-foreground" : "text-foreground/80")}>
                 {r.value}
               </div>
-              {r.points != null && (
-                <div className="mt-0.5 flex items-center justify-end gap-1">
-                  <span className={cn("text-sm font-bold tabular-nums", getScoreColor(r.points))}>
-                    {r.points.toFixed(1)}
-                  </span>
-                  <span className="text-[10px] text-muted-foreground">{t("điểm", "pts")}</span>
-                </div>
-              )}
+              {r.points != null && (() => {
+                const disp = rowPointsDisplay(r.points, r.pointsTone ?? (r.isTotal ? "score" : "score"));
+                return (
+                  <div className="mt-0.5 flex items-center justify-end gap-1">
+                    <span className={cn("text-sm font-bold tabular-nums", disp.className)}>
+                      {disp.text}
+                    </span>
+                    {disp.suffix && (
+                      <span className="text-[10px] text-muted-foreground">{t("điểm", disp.suffix)}</span>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           </div>
         ))}

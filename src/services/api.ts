@@ -264,18 +264,48 @@ export async function fetchReserveGrowth(
   return data.data;
 }
 
-export async function fetchAllAnalyses(): Promise<AiAnalysis[]> {
-  const { data } = await api.get<ApiResponse<AiAnalysis[]>>("/analysis/all");
+export type AnalysisListScope = "all" | "mine";
+
+export async function fetchAnalysisById(analysisId: string): Promise<AiAnalysis> {
+  const { data } = await api.get<ApiResponse<AiAnalysis>>(`/analysis/record/${encodeURIComponent(analysisId)}`);
   return data.data;
 }
 
-export async function fetchLatestAnalysis(appId: number): Promise<AiAnalysis | null> {
-  const { data } = await api.get<ApiResponse<AiAnalysis | null>>(`/analysis/${appId}`);
+export async function fetchAnalysisLookup(
+  appId: number,
+  analyzedAt: string,
+  by?: string,
+): Promise<AiAnalysis> {
+  const { data } = await api.get<ApiResponse<AiAnalysis>>("/analysis/lookup", {
+    params: { appId, at: analyzedAt, ...(by ? { by } : {}) },
+  });
   return data.data;
 }
 
-export async function fetchAnalysisHistory(appId: number): Promise<AiAnalysis[]> {
-  const { data } = await api.get<ApiResponse<AiAnalysis[]>>(`/analysis/${appId}/history`);
+export async function fetchAllAnalyses(scope: AnalysisListScope = "all"): Promise<AiAnalysis[]> {
+  const { data } = await api.get<ApiResponse<AiAnalysis[]>>("/analysis/all", {
+    params: { scope },
+  });
+  return data.data;
+}
+
+export async function fetchLatestAnalysis(
+  appId: number,
+  scope: AnalysisListScope = "all",
+): Promise<AiAnalysis | null> {
+  const { data } = await api.get<ApiResponse<AiAnalysis | null>>(`/analysis/${appId}`, {
+    params: { scope },
+  });
+  return data.data;
+}
+
+export async function fetchAnalysisHistory(
+  appId: number,
+  scope: AnalysisListScope = "all",
+): Promise<AiAnalysis[]> {
+  const { data } = await api.get<ApiResponse<AiAnalysis[]>>(`/analysis/${appId}/history`, {
+    params: { scope },
+  });
   return data.data;
 }
 

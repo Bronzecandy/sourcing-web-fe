@@ -142,6 +142,7 @@ export default function RubricPanel({
     if (!rubric) return new Map<string, RubricBlock["criteria"]>();
     const m = new Map<string, RubricBlock["criteria"]>();
     for (const c of rubric.criteria) {
+      if (c.partId === "red_flag") continue;
       if (!m.has(c.partId)) m.set(c.partId, []);
       m.get(c.partId)!.push(c);
     }
@@ -171,13 +172,19 @@ export default function RubricPanel({
 
   const testDecision = normalizeTestDecision(rubric.aggregate);
 
-  const partOrder = Array.from(grouped.keys()).sort((a, b) => {
-    if (a === "red_flag") return -1;
-    if (b === "red_flag") return 1;
-    const rank = (id: string) =>
-      ["overview", "gameplay", "presentation", "monetization", "socialization", "liveops", "other", "genre_specific", "red_flag"].indexOf(id);
-    return rank(a) - rank(b);
-  });
+  const partOrder = Array.from(grouped.keys())
+    .filter((partId) => {
+      if (partId === "red_flag") return false;
+      if (partId === "genre_specific" && rubric.genrePackResolved === "base") return false;
+      const rollup = rollupByPart.get(partId);
+      if (rollup?.weightInTotal != null && rollup.weightInTotal <= 0) return false;
+      return true;
+    })
+    .sort((a, b) => {
+      const rank = (id: string) =>
+        ["overview", "gameplay", "presentation", "monetization", "socialization", "liveops", "other", "genre_specific"].indexOf(id);
+      return rank(a) - rank(b);
+    });
 
   return (
     <div className="bg-card rounded-xl border border-border p-5 space-y-4">
@@ -199,12 +206,12 @@ export default function RubricPanel({
                 {" — "}
                 {rubric.genrePackResolved === "base"
                   ? t(
-                      "Phần \"Theo thể loại\" ~4% trong điểm tổng; các phần khác được scale lại.",
-                      "“Genre-specific” ~4% of total score; other parts scaled accordingly.",
+                      "Không có gói thể loại riêng — Gameplay 40%; không hiển thị phần Theo thể loại.",
+                      "No genre pack — Gameplay 40%; genre-specific section hidden.",
                     )
                   : t(
-                      "Gameplay ~14% và \"Theo thể loại\" ~24%; các phần khác chia ~62% theo tỷ lệ manifest.",
-                      "Gameplay ~14% and “Genre-specific” ~24%; remaining ~62% split across other parts per manifest ratios.",
+                      "Gameplay 26% + Theo thể loại 14% = 40%; Social giảm 2% so với manifest.",
+                      "Gameplay 26% + Genre-specific 14% = 40%; Social −2% vs manifest.",
                     )}
               </p>
             )}

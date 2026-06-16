@@ -31,6 +31,8 @@ export default function DistributionMetricSection({
   const hasGrowth = block.growthBuckets.some((b) => b.count > 0);
   const hasData = block.totalGames > 0 || hasAbsolute || hasGrowth;
   const isRating = metric === "rating";
+  const denseBuckets = absoluteBuckets.length > 15;
+  const denseGrowth = isRating && block.growthBuckets.length > 8;
 
   return (
     <div className="overflow-hidden rounded-xl border border-border bg-card">
@@ -65,22 +67,29 @@ export default function DistributionMetricSection({
               intro={copy.absoluteIntro}
             />
             {hasAbsolute ? (
-              <div className="grid grid-cols-1 gap-4 xl:grid-cols-12 xl:items-start">
-                <div className="space-y-3 xl:col-span-7">
+              <div
+                className={cn(
+                  "grid grid-cols-1 gap-4",
+                  denseBuckets ? "" : "xl:grid-cols-12 xl:items-start",
+                )}
+              >
+                <div className={denseBuckets ? "space-y-3" : "space-y-3 xl:col-span-7"}>
                   <DistributionBarChart
                     buckets={absoluteBuckets}
                     lifecycle="reserve"
                     metric={metric}
                     singleBar
+                    dense={denseBuckets}
                     labels={copy}
                   />
                   <DistributionChartLegendGuide guide={copy.guide} t={t} />
                 </div>
-                <div className="xl:col-span-5">
+                <div className={denseBuckets ? "" : "xl:col-span-5"}>
                   <DistributionAbsoluteTable
                     buckets={absoluteBuckets}
                     metric={metric}
                     labels={copy.absoluteTable}
+                    dense={denseBuckets}
                   />
                 </div>
               </div>
@@ -100,22 +109,29 @@ export default function DistributionMetricSection({
               intro={copy.growthIntro}
             />
             {hasGrowth ? (
-              <div className="grid grid-cols-1 gap-4 xl:grid-cols-12 xl:items-start">
-                <div className="xl:col-span-7">
+              <div
+                className={cn(
+                  "grid grid-cols-1 gap-4",
+                  denseGrowth ? "" : "xl:grid-cols-12 xl:items-start",
+                )}
+              >
+                <div className={denseGrowth ? "" : "xl:col-span-7"}>
                   <DistributionGrowthBarChart
                     buckets={block.growthBuckets}
                     metric={metric}
+                    dense={denseGrowth}
                     labels={{
                       games: copy.growthTable.games,
                       totalChange: copy.growthTable.totalChange,
                     }}
                   />
                 </div>
-                <div className="xl:col-span-5">
+                <div className={denseGrowth ? "" : "xl:col-span-5"}>
                   <DistributionGrowthTable
                     buckets={block.growthBuckets}
                     metric={metric}
                     labels={copy.growthTable}
+                    dense={denseGrowth}
                   />
                 </div>
               </div>

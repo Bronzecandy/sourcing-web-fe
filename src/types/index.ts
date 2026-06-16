@@ -80,9 +80,14 @@ export interface PotentialScore {
   appId: number;
   title: string;
   iconUrl: string | null;
-  momentumScore: number;
-  engagementScore: number;
-  stabilityScore: number;
+  audienceScore: number;
+  /** @deprecated alias */
+  scaleScore?: number;
+  /** @deprecated alias */
+  growthScore?: number;
+  ratingScore: number;
+  rankQualityScore: number;
+  launchBoardScore?: number;
   dataConfidence: number;
   compositeScore: number;
   currentRank: number | null;
@@ -178,6 +183,14 @@ export interface RubricRedFlagBlock {
   violenceScore?: number | null;
   sexualScore?: number | null;
   otherTaboosNote?: string | null;
+  playerMentions?: {
+    summary?: string | null;
+    politics?: string | null;
+    religion?: string | null;
+    casino?: string | null;
+    violence?: string | null;
+    sexual?: string | null;
+  };
 }
 
 export interface RedFlagsChecklist {
@@ -190,6 +203,8 @@ export interface RedFlagsChecklist {
 
 export interface RedFlagAtAGlance {
   headlineVi: string;
+  detailVi?: string[];
+  playerMentions?: RubricRedFlagBlock["playerMentions"];
   riskLevel: "clear" | "low" | "medium" | "high" | "critical";
   blockedByHardGate: boolean;
   hasElevatedRisk: boolean;
@@ -264,6 +279,8 @@ export interface AiAnalysis {
   dateRangeStart: string | null;
   dateRangeEnd: string | null;
   analyzedAt: string;
+  analysisId?: string;
+  analyzedByUserId?: string;
   reviewWindowMode?: "all" | "days" | "range";
   reviewWindowDays?: 7 | 14 | 30 | 60;
   reviewFilterFrom?: string;
@@ -430,65 +447,63 @@ export interface DistributionTrendsResponse {
   metrics: Array<{ metric: DistributionMetric; trend: DistributionTrendPoint[] }>;
 }
 
+export type PotentialScaleMetric = "reserve" | "download";
+
+export interface PotentialAudienceBlock {
+  score: number;
+  metric: PotentialScaleMetric;
+  start: number | null;
+  end: number | null;
+  delta: number;
+  baseValue: number;
+  baseTierLabel: string | null;
+  growthBonus: number;
+  growthTierLabel: string | null;
+  growthWeight: number;
+}
+
+/** @deprecated use PotentialAudienceBlock */
+export type PotentialScaleBlock = PotentialAudienceBlock;
+/** @deprecated use PotentialAudienceBlock */
+export type PotentialGrowthBlock = PotentialAudienceBlock;
+
+export interface PotentialRatingBlock {
+  score: number;
+  start: number | null;
+  end: number | null;
+  delta: number;
+  baseValue: number;
+  deltaAdjustment: number;
+}
+
+export interface PotentialRankQualityBlock {
+  score: number;
+  positionQuality: number;
+  top10Rate: number;
+  top20Rate: number;
+  top50Rate: number;
+  presenceScore: number;
+  streakScore: number;
+  volatilityScore: number;
+  movementScore: number;
+  avgRank: number;
+  bestRank: number;
+  rankStart: number;
+  rankEnd: number;
+  change: number;
+  stdDev: number;
+  longestTop20Streak: number;
+  daysTracked: number;
+}
+
 export interface GamePotentialDetail {
-  momentum: {
-    score: number;
-    positionScore: number;
-    avgRank: number;
-    avgRecentRank: number;
-    rankChangeScore: number;
-    climbScore: number;
-    maintenanceScore: number;
-    absoluteScore: number;
-    relativeScore: number;
-    peakScore: number;
-    bestRank: number;
-    rankStart: number;
-    rankEnd: number;
-    change: number;
-  };
-  engagement: {
-    score: number;
-    ratingStart: number | null;
-    ratingEnd: number | null;
-    ratingDelta: number;
-    ratingBaseScore: number | null;
-    ratingChangeScore: number | null;
-    ratingScore: number | null;
-    fansStart: number | null;
-    fansEnd: number | null;
-    fansGrowth: number;
-    fansRate: number | null;
-    fansRateScore: number | null;
-    fansAbsScore: number | null;
-    fansScore: number | null;
-    resStart: number | null;
-    resEnd: number | null;
-    resGrowth: number;
-    resRate: number | null;
-    resRateScore: number | null;
-    resAbsScore: number | null;
-    resScore: number | null;
-    dlStart?: number | null;
-    dlEnd?: number | null;
-    dlGrowth?: number;
-    dlRate?: number | null;
-    dlRateScore?: number | null;
-    dlAbsScore?: number | null;
-    dlScore?: number | null;
-    subsCount: number;
-    absThreshold: number;
-  };
-  stability: {
-    score: number;
-    presenceScore: number;
-    volatilityScore: number;
-    streakScore: number;
-    daysInTop: number;
-    stdDev: number;
-    maxStreak: number;
-    analysisDays: number;
-  };
+  audience: PotentialAudienceBlock;
+  /** @deprecated use audience */
+  scale?: PotentialAudienceBlock;
+  /** @deprecated use audience */
+  growth?: PotentialAudienceBlock;
+  rating: PotentialRatingBlock;
+  rankQuality: PotentialRankQualityBlock;
   confidence: {
     coverage: number;
     multiplier: number;
@@ -497,6 +512,7 @@ export interface GamePotentialDetail {
   };
   compositeScore: number;
   rawComposite: number;
+  floorApplied?: boolean;
   segment?: PotentialSegment;
   preLaunchBonus?: number;
   preLaunchScore?: number;

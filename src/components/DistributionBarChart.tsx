@@ -25,6 +25,8 @@ interface DistributionBarChartProps {
   metric: DistributionMetric;
   /** Khi true — một cột duy nhất (dùng trong tab lifecycle cụ thể). */
   singleBar?: boolean;
+  /** Nhiều bucket (vd rating 0.25) — tăng chiều cao, xoay nhãn trục X. */
+  dense?: boolean;
   labels: {
     count: string;
     countDelta: string;
@@ -102,6 +104,7 @@ export default function DistributionBarChart({
   lifecycle,
   metric,
   singleBar = false,
+  dense = false,
   labels,
 }: DistributionBarChartProps) {
   const chartData = buckets.map((b) => ({
@@ -117,12 +120,22 @@ export default function DistributionBarChart({
   }));
 
   const showStacked = !singleBar && lifecycle === "all";
+  const chartHeight = dense ? 420 : 360;
+  const xAngle = dense ? -40 : -20;
+  const xHeight = dense ? 88 : 56;
 
   return (
-    <ResponsiveContainer width="100%" height={360}>
-      <ComposedChart data={chartData} margin={{ top: 8, right: 16, left: 0, bottom: 8 }}>
+    <ResponsiveContainer width="100%" height={chartHeight}>
+      <ComposedChart data={chartData} margin={{ top: 8, right: 16, left: 0, bottom: dense ? 4 : 8 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-        <XAxis dataKey="label" tick={{ fontSize: 11 }} interval={0} angle={-20} textAnchor="end" height={56} />
+        <XAxis
+          dataKey="label"
+          tick={{ fontSize: dense ? 9 : 11 }}
+          interval={0}
+          angle={xAngle}
+          textAnchor="end"
+          height={xHeight}
+        />
         <YAxis yAxisId="left" tick={{ fontSize: 11 }} allowDecimals={false} />
         <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 11 }} allowDecimals={false} />
         <Tooltip content={<CustomTooltip labels={labels} metric={metric} />} />

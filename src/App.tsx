@@ -18,6 +18,7 @@ const Ranking = lazy(() => import("./pages/Ranking"));
 const GameDetail = lazy(() => import("./pages/GameDetail"));
 const Potential = lazy(() => import("./pages/Potential"));
 const AIAnalysis = lazy(() => import("./pages/AIAnalysis"));
+const AnalysisDetail = lazy(() => import("./pages/AnalysisDetail"));
 const Libraries = lazy(() => import("./pages/Libraries"));
 const Login = lazy(() => import("./pages/Login"));
 const Waiting = lazy(() => import("./pages/Waiting"));
@@ -78,6 +79,7 @@ export default function App() {
                   <Route path="/game/:id" element={<GameDetail />} />
                   <Route path="/potential" element={<Potential />} />
                   <Route path="/distribution" element={<Distribution />} />
+                  <Route path="/ai-analysis/a/:analysisId" element={<AnalysisDetail />} />
                   <Route path="/ai-analysis" element={<AIAnalysis />} />
                   <Route path="/libraries" element={<Libraries />} />
                   <Route path="/admin/users" element={<AdminUsers />} />

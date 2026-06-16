@@ -111,7 +111,7 @@ export default function AnalysisDetailContent({
           <>
             <h4 className="text-sm font-medium mt-4 mb-2 flex items-center gap-1 text-blue-500">
               <TrendingUp className="w-3.5 h-3.5" />
-              {t("Xu hướng gần đây", "Recent trend")}
+              {t("Xu hướng gần đây (~60 ngày)", "Recent trend (~60 days)")}
             </h4>
             <AnalysisBulletBlock
               items={getRecentTrendBullets(analysis)}

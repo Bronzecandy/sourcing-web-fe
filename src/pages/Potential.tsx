@@ -70,17 +70,19 @@ export default function Potential() {
   const selected = activeScores?.find((s) => s.appId === selectedAppId);
   const breakouts = selectedSegment === "reserve" ? breakoutsReserve : breakoutsLaunched;
 
-  const radarData = useMemo(
-    () =>
-      selected
-        ? [
-            { metric: potentialRadarMetric("Momentum", lang), value: selected.momentumScore },
-            { metric: potentialRadarMetric("Engagement", lang), value: selected.engagementScore },
-            { metric: potentialRadarMetric("Stability", lang), value: selected.stabilityScore },
-          ]
-        : [],
-    [selected, lang],
-  );
+  const radarData = useMemo(() => {
+    if (!selected) return [];
+    const audience = selected.audienceScore ?? selected.scaleScore ?? 0;
+    const base = [
+      { metric: potentialRadarMetric("Audience", lang), value: audience },
+      { metric: potentialRadarMetric("Rating", lang), value: selected.ratingScore },
+      { metric: potentialRadarMetric("RankQuality", lang), value: selected.rankQualityScore },
+    ];
+    if (selected.launchBoardScore != null) {
+      base.push({ metric: potentialRadarMetric("LaunchBoard", lang), value: selected.launchBoardScore });
+    }
+    return base;
+  }, [selected, lang]);
 
   const pickRow = (appId: number) => {
     setSelectedAppId(appId);
@@ -90,10 +92,13 @@ export default function Potential() {
   const tableScores = activeScores;
   const tableSubtitle =
     selectedSegment === "reserve"
-      ? t("Bảng xếp hạng đăng ký trước — công thức v6", "Pre-registration chart — algo v6")
+      ? t(
+          "Game đặt chỗ — công thức v9 (Quy mô & tăng trưởng · Đánh giá · Chất lượng hạng)",
+          "Reserve games — algo v9 (Audience · Rating · Rank Quality)",
+        )
       : t(
-          "Công thức v8 — chỉ tính sau ngày lên bảng Hot/Pop/New",
-          "Algo v8 — scores only from post-launch chart days",
+          "Công thức v15 — chỉ tính sau ngày lên bảng Hot/Pop/New",
+          "Algo v15 — scores only from post-launch chart days",
         );
 
   return (
@@ -432,9 +437,9 @@ function PotentialRankingTable({
                     </th>
                   </>
                 )}
-                <th className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase">{t("Đà tăng", "Momentum")}</th>
-                <th className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase">{t("TTác.", "Engage.")}</th>
-                <th className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase">{t("Ổn định", "Stability")}</th>
+                <th className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase">{t("Quy mô & TT", "Audience")}</th>
+                <th className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase">{t("Đánh giá", "Rating")}</th>
+                <th className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase">{t("Chất lượng hạng", "Rank")}</th>
                 <th className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase">{t("Tin cậy", "Conf.")}</th>
                 <th className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase">{t("Điểm", "Score")}</th>
                 <th className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase">{t("Xu hướng", "Trend")}</th>
@@ -491,13 +496,13 @@ function PotentialRankingTable({
                     </>
                   )}
                   <td className="px-3 py-3">
-                    <ScoreBar value={s.momentumScore} />
+                    <ScoreBar value={s.audienceScore ?? s.scaleScore ?? 0} />
                   </td>
                   <td className="px-3 py-3">
-                    <ScoreBar value={s.engagementScore} />
+                    <ScoreBar value={s.ratingScore} />
                   </td>
                   <td className="px-3 py-3">
-                    <ScoreBar value={s.stabilityScore} />
+                    <ScoreBar value={s.rankQualityScore} />
                   </td>
                   <td className="px-3 py-3">
                     <ConfidenceBadge value={s.dataConfidence} />

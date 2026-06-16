@@ -2,6 +2,7 @@ import { useState, useMemo, type ReactNode } from "react";
 import { ArrowUpDown, ChevronUp, ChevronDown } from "lucide-react";
 import type { DistributionBucket, DistributionMetric } from "@/types";
 import { formatDistributionMetricValue } from "@/lib/distribution-chart-copy";
+import { cn } from "@/lib/utils";
 
 type SortKey = "bucket" | "count" | "metricSum" | "sharePct";
 
@@ -14,12 +15,14 @@ interface DistributionAbsoluteTableProps {
     share: string;
     metricTotal: string;
   };
+  dense?: boolean;
 }
 
 export default function DistributionAbsoluteTable({
   buckets,
   metric,
   labels,
+  dense = false,
 }: DistributionAbsoluteTableProps) {
   const total = buckets.reduce((s, b) => s + b.count, 0);
   const [sort, setSort] = useState<{ key: SortKey; dir: "asc" | "desc" }>({
@@ -59,9 +62,14 @@ export default function DistributionAbsoluteTable({
   );
 
   return (
-    <div className="overflow-x-auto rounded-lg border border-border">
-      <table className="w-full text-sm">
-        <thead className="bg-muted/40">
+    <div
+      className={cn(
+        "overflow-x-auto rounded-lg border border-border",
+        dense && "max-h-[min(70vh,520px)] overflow-y-auto",
+      )}
+    >
+      <table className={dense ? "w-full text-xs" : "w-full text-sm"}>
+        <thead className="bg-muted/40 sticky top-0 z-10">
           <tr>
             <Th col="bucket">{labels.range}</Th>
             <Th col="count">{labels.games}</Th>

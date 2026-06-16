@@ -22,23 +22,36 @@ function barColor(bucket: DistributionGrowthBucket): string {
 interface DistributionGrowthBarChartProps {
   buckets: DistributionGrowthBucket[];
   metric: DistributionMetric;
+  dense?: boolean;
   labels: { games: string; totalChange: string };
 }
 
 export default function DistributionGrowthBarChart({
   buckets,
   metric,
+  dense = false,
   labels,
 }: DistributionGrowthBarChartProps) {
   const chartData = buckets.filter((b) => b.count > 0);
 
   if (chartData.length === 0) return null;
 
+  const chartHeight = dense ? 320 : 280;
+  const xAngle = dense ? -32 : -28;
+  const xHeight = dense ? 72 : 64;
+
   return (
-    <ResponsiveContainer width="100%" height={280}>
-      <BarChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: 48 }}>
+    <ResponsiveContainer width="100%" height={chartHeight}>
+      <BarChart data={chartData} margin={{ top: 8, right: 8, left: 0, bottom: dense ? 4 : 8 }}>
         <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-        <XAxis dataKey="label" tick={{ fontSize: 10 }} interval={0} angle={-28} textAnchor="end" height={64} />
+        <XAxis
+          dataKey="label"
+          tick={{ fontSize: dense ? 9 : 10 }}
+          interval={0}
+          angle={xAngle}
+          textAnchor="end"
+          height={xHeight}
+        />
         <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
         <Tooltip
           content={({ active, payload }) => {

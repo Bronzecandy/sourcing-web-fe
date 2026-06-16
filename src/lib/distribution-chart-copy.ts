@@ -40,6 +40,7 @@ const METRIC: Record<
 };
 
 export function formatDistributionMetricValue(metric: DistributionMetric, value: number): string {
+  if (!Number.isFinite(value)) return "—";
   if (metric === "rating") {
     if (Math.abs(value) < 10 && !Number.isInteger(value)) return value.toFixed(2);
     return value.toFixed(1);
