@@ -51,6 +51,7 @@ const NAV_ITEMS: Array<{
     icon: Brain,
     label: "AI Review Analysis",
     permissions: ["ai.read", "ai.run"],
+    end: true,
   },
   {
     to: "/libraries",

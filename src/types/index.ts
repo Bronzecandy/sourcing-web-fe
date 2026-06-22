@@ -161,6 +161,7 @@ export interface RubricCriterionOutput {
   elementVi: string;
   input: string;
   weightInPart: number;
+  genrePack?: string | null;
   score: number | null;
   severity?: RedFlagSeverity | null;
   /** Red Flag: Có / Không / chưa rõ — thay cho ô điểm số */
@@ -248,6 +249,9 @@ export interface RubricAggregate {
 export interface RubricBlock {
   manifestVersion: number;
   genrePackResolved?: string | null;
+  genrePacksResolved?: GenrePackResolvedItem[];
+  genrePackBlendReasoning?: string;
+  genrePackRollups?: GenrePackRollup[];
   criteria: RubricCriterionOutput[];
   aggregate: RubricAggregate;
   redFlag: RubricRedFlagBlock;
@@ -256,6 +260,46 @@ export interface RubricBlock {
     meetsThreshold: boolean;
     threshold: number;
   };
+}
+
+export interface GenrePackResolvedItem {
+  packId: string;
+  weight: number;
+  labelVi?: string;
+}
+
+/** Điểm trung bình có trọng số trong phần Theo thể loại, theo từng gói genre. */
+export interface GenrePackRollup {
+  packId: string;
+  weight: number;
+  labelVi?: string;
+  averageScore: number | null;
+}
+
+export interface GenrePackPlan {
+  packs: GenrePackResolvedItem[];
+  reasoning: string;
+  ratioPreset?: "7:3" | "6:4" | null;
+}
+
+export interface AnalysisPrepareExistingItem {
+  appId: number;
+  gameName?: string;
+  analyzedAt?: string;
+  reviewsAnalyzed?: number;
+  score?: number | null;
+  genrePacks?: GenrePackResolvedItem[];
+  genrePackResolved?: string | null;
+}
+
+export interface AnalysisPrepareResult {
+  appId: number;
+  gameName: string;
+  iconUrl: string | null;
+  tagInferredPacks: string[];
+  availablePackIds: string[];
+  genrePackPlan: GenrePackPlan;
+  existingAnalyses: AnalysisPrepareExistingItem[];
 }
 
 export interface AiAnalysis {

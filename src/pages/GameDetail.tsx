@@ -21,13 +21,14 @@ import type { HistoryRange } from "@/types/history-range";
 import AnalysisSourceBadge from "@/components/AnalysisSourceBadge";
 import { analysisDetailPath } from "@/lib/analysis-url";
 import StoreLinkChips from "@/components/StoreLinkChips";
+import { LaunchBoardTags } from "@/components/LaunchBoardTags";
 import { analysisStoreLinks, gameStoreLinks } from "@/lib/store-links";
 import { DEFAULT_REVIEW_WINDOW, type ReviewWindow } from "@/types/review-window";
 import { buildFanReserveDeltaSeries, formatDelta } from "@/lib/chart-delta";
-import { LaunchBoardTags } from "@/components/LaunchBoardTags";
+import AnalysisConfirmWizard from "@/components/AnalysisConfirmWizard";
 import { useUiCopy, potentialRadarMetric } from "@/lib/use-ui-copy";
 import { cn, formatNumber, getScoreColor } from "@/lib/utils";
-import type { AiAnalysis, GameReview, GamePotentialDetail, PotentialBreakdown } from "@/types";
+import type { AiAnalysis, GameReview, GamePotentialDetail, PotentialBreakdown, GenrePackResolvedItem } from "@/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { hasPermission } from "@/lib/permissions";
 
@@ -88,6 +89,7 @@ export default function GameDetail() {
   });
 
   const [reviewWindow, setReviewWindow] = useState<ReviewWindow>(DEFAULT_REVIEW_WINDOW);
+  const [wizardOpen, setWizardOpen] = useState(false);
   const [analysisProgress, setAnalysisProgress] =
     useState<AnalysisProgressState>(INITIAL_ANALYSIS_PROGRESS);
 
@@ -99,7 +101,8 @@ export default function GameDetail() {
   );
 
   const analysisMutation = useMutation({
-    mutationFn: () => triggerAnalysis(appId, reviewWindow, onAnalysisProgress),
+    mutationFn: (genrePacks?: GenrePackResolvedItem[]) =>
+      triggerAnalysis(appId, reviewWindow, onAnalysisProgress, genrePacks),
     onMutate: () => setAnalysisProgress(INITIAL_ANALYSIS_PROGRESS),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["ai-analysis", appId] });
@@ -133,13 +136,15 @@ export default function GameDetail() {
     return String(v);
   };
 
-  const chartData = [...game.history].reverse().map((h) => ({
+  const historyChronological = [...game.history].sort((a, b) => a.date.localeCompare(b.date));
+
+  const chartData = historyChronological.map((h) => ({
     date: new Date(h.date).toLocaleDateString("en", { month: "short", day: "numeric" }),
     android: h.androidRank,
     ios: h.iosRank,
   }));
 
-  const reserveChartData = [...game.history].reverse().map((h) => ({
+  const reserveChartData = historyChronological.map((h) => ({
     date: new Date(h.date).toLocaleDateString("en", { month: "short", day: "numeric" }),
     reserves: h.reserveCount,
     fans: h.fansCount,
@@ -147,7 +152,7 @@ export default function GameDetail() {
     rating: h.rating != null ? parseFloat(h.rating) : null,
   }));
 
-  const fanDeltaChartData = buildFanReserveDeltaSeries(game.history).map((h) => ({
+  const fanDeltaChartData = buildFanReserveDeltaSeries(historyChronological).map((h) => ({
     date: new Date(h.date).toLocaleDateString("en", { month: "short", day: "numeric" }),
     fansDelta: h.fansDelta,
     reservesDelta: h.reservesDelta,
@@ -254,6 +259,19 @@ export default function GameDetail() {
           canRun={canAiRun}
           canDelete={canAiDelete}
           currentUserId={user?.id}
+          onRequestAnalysis={() => setWizardOpen(true)}
+        />
+      )}
+
+      {canAiRun && (
+        <AnalysisConfirmWizard
+          open={wizardOpen}
+          onClose={() => setWizardOpen(false)}
+          source={{ kind: "database", appId }}
+          onConfirm={(genrePacks) => {
+            setWizardOpen(false);
+            analysisMutation.mutate(genrePacks);
+          }}
         />
       )}
 
@@ -429,9 +447,10 @@ function AIAnalysisSection({
   canRun,
   canDelete,
   currentUserId,
+  onRequestAnalysis,
 }: {
   analysisResult: AiAnalysis | undefined;
-  analysisMutation: { mutate: () => void; isPending: boolean; isError: boolean; error: Error | null };
+  analysisMutation: { mutate: (genrePacks?: GenrePackResolvedItem[]) => void; isPending: boolean; isError: boolean; error: Error | null };
   analysisProgress: AnalysisProgressState;
   history: AiAnalysis[];
   reviewWindow: ReviewWindow;
@@ -439,6 +458,7 @@ function AIAnalysisSection({
   canRun: boolean;
   canDelete: boolean;
   currentUserId?: string;
+  onRequestAnalysis: () => void;
 }) {
   const [showHistory, setShowHistory] = useState(false);
   const queryClient = useQueryClient();
@@ -486,7 +506,7 @@ function AIAnalysisSection({
         <AnalysisProgressPanel progress={analysisProgress} className="mb-4 text-left" />
       )}
       <button
-        onClick={() => analysisMutation.mutate()}
+        onClick={onRequestAnalysis}
         disabled={analysisMutation.isPending}
         className="mx-auto px-6 py-2.5 bg-gradient-to-r from-purple-600 to-blue-600 text-white rounded-lg text-sm font-medium hover:from-purple-700 hover:to-blue-700 disabled:opacity-50 transition-all shadow-md inline-flex items-center justify-center"
       >

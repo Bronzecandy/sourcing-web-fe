@@ -3,6 +3,13 @@ import { ChevronDown, ChevronRight, BookMarked, Sparkles, Blend } from "lucide-r
 import type { RubricBlock, RubricCriterionOutput, RubricPartRollup, RubricTestDecision } from "@/types";
 import { useUiCopy } from "@/lib/use-ui-copy";
 import { cn, getScoreColor } from "@/lib/utils";
+import {
+  formatPackBlend,
+  packLabel,
+  packTheme,
+  PACK_LABELS,
+  resolveGenrePackRollups,
+} from "@/lib/genre-pack-ui";
 
 const PART_LABELS: Record<string, { vi: string; en: string }> = {
   overview: { vi: "Tổng quan", en: "Overview" },
@@ -15,6 +22,17 @@ const PART_LABELS: Record<string, { vi: string; en: string }> = {
   genre_specific: { vi: "Theo thể loại", en: "Genre-specific" },
   red_flag: { vi: "Red Flag", en: "Red Flag" },
 };
+
+function formatPackBlendLine(rubric: RubricBlock, lang: "vi" | "en"): string | null {
+  if (rubric.genrePacksResolved && rubric.genrePacksResolved.length > 0) {
+    if (rubric.genrePacksResolved.length === 1 && rubric.genrePacksResolved[0].packId === "base") {
+      return PACK_LABELS.base[lang];
+    }
+    return formatPackBlend(rubric.genrePacksResolved, lang);
+  }
+  if (rubric.genrePackResolved) return rubric.genrePackResolved;
+  return null;
+}
 
 /** Phản hồi API cũ (3 giá trị) → quyết định mới. */
 const LEGACY_DECISION_MAP: Record<string, RubricTestDecision> = {
@@ -100,8 +118,9 @@ function buildPartCollapsedBullets(
   partId: string,
   rows: RubricCriterionOutput[],
   t: (vi: string, en: string) => string,
-): { key: string; content: ReactNode }[] {
-  const bullets: { key: string; content: ReactNode }[] = [];
+  multiGenre = false,
+): { key: string; content: ReactNode; packId?: string }[] {
+  const bullets: { key: string; content: ReactNode; packId?: string }[] = [];
   for (const row of rows) {
     if (partId === "red_flag") {
       bullets.push({
@@ -117,9 +136,13 @@ function buildPartCollapsedBullets(
     if (row.reasoning?.trim()) {
       bullets.push({
         key: `${row.id}-reason`,
+        packId: multiGenre ? row.genrePack ?? undefined : undefined,
         content: (
           <>
-            <span className="font-medium text-foreground">{row.elementVi}:</span> {row.reasoning.trim()}
+            <span className={cn("font-medium", multiGenre && row.genrePack ? packTheme(row.genrePack).text : "text-foreground")}>
+              {row.elementVi}:
+            </span>{" "}
+            {row.reasoning.trim()}
           </>
         ),
       });
@@ -171,11 +194,20 @@ export default function RubricPanel({
   if (!rubric) return null;
 
   const testDecision = normalizeTestDecision(rubric.aggregate);
+  const langKey = lang === "vi" ? "vi" : "en";
+  const genrePackRollups = resolveGenrePackRollups(rubric);
+  const hasMultiGenre = genrePackRollups.length > 1;
 
   const partOrder = Array.from(grouped.keys())
     .filter((partId) => {
       if (partId === "red_flag") return false;
-      if (partId === "genre_specific" && rubric.genrePackResolved === "base") return false;
+      if (partId === "genre_specific") {
+        const packs = rubric.genrePacksResolved ?? [];
+        const isBaseOnly =
+          rubric.genrePackResolved === "base" &&
+          (packs.length === 0 || (packs.length === 1 && packs[0].packId === "base"));
+        if (isBaseOnly) return false;
+      }
       const rollup = rollupByPart.get(partId);
       if (rollup?.weightInTotal != null && rollup.weightInTotal <= 0) return false;
       return true;
@@ -199,22 +231,30 @@ export default function RubricPanel({
                 ? t(`Đủ ngưỡng dữ liệu (≥${rubric.dataConfidence.threshold} review)`, `Enough data (≥${rubric.dataConfidence.threshold} reviews)`)
                 : t(`Chưa đủ ngưỡng (< ${rubric.dataConfidence.threshold} review)`, `Below threshold (< ${rubric.dataConfidence.threshold} reviews)`)}
             </p>
-            {rubric.genrePackResolved != null && rubric.genrePackResolved !== "" && (
-              <p className="text-[11px] text-muted-foreground leading-snug text-left">
-                <span className="font-medium text-foreground">{t("Gói chấm:", "Scoring pack:")}</span>{" "}
-                <span className="font-medium text-foreground">{rubric.genrePackResolved}</span>
-                {" — "}
-                {rubric.genrePackResolved === "base"
-                  ? t(
-                      "Không có gói thể loại riêng — Gameplay 40%; không hiển thị phần Theo thể loại.",
-                      "No genre pack — Gameplay 40%; genre-specific section hidden.",
-                    )
-                  : t(
-                      "Gameplay 26% + Theo thể loại 14% = 40%; Social giảm 2% so với manifest.",
-                      "Gameplay 26% + Genre-specific 14% = 40%; Social −2% vs manifest.",
-                    )}
-              </p>
-            )}
+            {(() => {
+              const packLabel = formatPackBlendLine(rubric, langKey);
+              if (!packLabel) return null;
+              const isBase = rubric.genrePackResolved === "base" && (rubric.genrePacksResolved?.length ?? 0) <= 1;
+              return (
+                <p className="text-[11px] text-muted-foreground leading-snug text-left">
+                  <span className="font-medium text-foreground">{t("Gói chấm:", "Scoring pack:")}</span>{" "}
+                  <span className="font-medium text-foreground">{packLabel}</span>
+                  {" — "}
+                  {isBase
+                    ? t(
+                        "Không có gói thể loại riêng — Gameplay 40%; không hiển thị phần Theo thể loại.",
+                        "No genre pack — Gameplay 40%; genre-specific section hidden.",
+                      )
+                    : t(
+                        "Gameplay 10% + Theo thể loại 30% = 40%; Social giảm 2% so với manifest.",
+                        "Gameplay 10% + Genre-specific 30% = 40%; Social −2% vs manifest.",
+                      )}
+                  {rubric.genrePackBlendReasoning && (
+                    <span className="block mt-1 text-muted-foreground/90">{rubric.genrePackBlendReasoning}</span>
+                  )}
+                </p>
+              );
+            })()}
           </div>
           {showAggregateScore && (
             <div className="shrink-0 w-full sm:w-auto sm:min-w-[200px] rounded-lg border border-border/70 bg-muted/25 px-4 py-3 text-left space-y-1.5">
@@ -239,56 +279,152 @@ export default function RubricPanel({
         {partOrder.map((partId) => {
           const rows = grouped.get(partId) ?? [];
           if (rows.length === 0) return null;
-          const label = PART_LABELS[partId]?.[lang === "vi" ? "vi" : "en"] ?? partId;
+          const isGenrePart = partId === "genre_specific";
+          const packOrder = rubric.genrePacksResolved?.map((p) => p.packId) ?? [];
+          const displayRows =
+            isGenrePart && packOrder.length > 1
+              ? [...rows].sort(
+                  (a, b) => packOrder.indexOf(a.genrePack ?? "") - packOrder.indexOf(b.genrePack ?? ""),
+                )
+              : rows;
+          const label = PART_LABELS[partId]?.[langKey] ?? partId;
           const open = openParts[partId] ?? false;
           const rollup = rollupByPart.get(partId);
-          const collapsedBullets = buildPartCollapsedBullets(partId, rows, t);
+          const partGenreRollups = isGenrePart ? genrePackRollups : [];
+          const collapsedBullets = buildPartCollapsedBullets(
+            partId,
+            isGenrePart && genrePackRollups.length > 0 ? displayRows : rows,
+            t,
+            isGenrePart && genrePackRollups.length > 0,
+          );
           return (
             <div key={partId} className="border border-border/60 rounded-lg overflow-hidden">
               <button
                 type="button"
-                className="w-full flex items-center gap-2 px-3 py-2 bg-muted/40 text-left text-sm font-medium hover:bg-muted/60 transition-colors"
+                className="w-full flex flex-col sm:flex-row sm:items-center gap-2 px-3 py-2 bg-muted/40 text-left text-sm font-medium hover:bg-muted/60 transition-colors"
                 onClick={() => setOpenParts((o) => ({ ...o, [partId]: !open }))}
               >
-                {open ? <ChevronDown className="w-4 h-4 shrink-0" /> : <ChevronRight className="w-4 h-4 shrink-0" />}
-                <span className="flex-1 flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                  <span>{label}</span>
-                  {partId !== "red_flag" && (() => {
-                    const effPct =
-                      rollup?.weightInTotal != null ? Math.round(rollup.weightInTotal * 100) : null;
-                    const pct = effPct != null ? `${effPct}%` : "—";
-                    return (
-                      <span className="text-xs font-normal text-muted-foreground">
-                        {t("Trọng số:", "Weight:")}{" "}
-                        <span className="tabular-nums font-medium text-foreground">{pct}</span>
+                <div className="flex items-center gap-2 min-w-0 flex-1">
+                  {open ? <ChevronDown className="w-4 h-4 shrink-0" /> : <ChevronRight className="w-4 h-4 shrink-0" />}
+                  <span className="flex-1 flex flex-col gap-1 min-w-0">
+                    <span className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+                      <span>{label}</span>
+                      {partId !== "red_flag" && (() => {
+                        const effPct =
+                          rollup?.weightInTotal != null ? Math.round(rollup.weightInTotal * 100) : null;
+                        const pct = effPct != null ? `${effPct}%` : "—";
+                        return (
+                          <span className="text-xs font-normal text-muted-foreground">
+                            {t("Trọng số:", "Weight:")}{" "}
+                            <span className="tabular-nums font-medium text-foreground">{pct}</span>
+                          </span>
+                        );
+                      })()}
+                    </span>
+                    {isGenrePart && partGenreRollups.length > 0 && (
+                      <span className="flex flex-wrap gap-1.5">
+                        {partGenreRollups.map((p) => (
+                          <span
+                            key={p.packId}
+                            className={cn(
+                              "inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full border",
+                              packTheme(p.packId).badge,
+                            )}
+                          >
+                            {packLabel(p.packId, langKey, p.labelVi)} {Math.round(p.weight * 100)}%
+                          </span>
+                        ))}
                       </span>
-                    );
-                  })()}
-                </span>
-                {partId !== "red_flag" && rollup?.partAverageScore != null && (
-                  <span
-                    className={cn(
-                      "text-sm tabular-nums font-bold shrink-0",
-                      getScoreColor(rollup.partAverageScore),
                     )}
-                  >
-                    {rollup.partAverageScore.toFixed(1)}
                   </span>
-                )}
+                </div>
+                {partId !== "red_flag" &&
+                  (isGenrePart && partGenreRollups.length > 0 ? (
+                    <div className="flex flex-wrap sm:flex-col items-start sm:items-end gap-1.5 shrink-0 pl-6 sm:pl-0">
+                      {partGenreRollups.map((p) => (
+                        <div key={p.packId} className="flex items-center gap-2">
+                          <span className={cn("text-[10px] font-semibold uppercase tracking-wide", packTheme(p.packId).text)}>
+                            {packLabel(p.packId, langKey, p.labelVi)}
+                          </span>
+                          <span
+                            className={cn(
+                              "text-sm tabular-nums font-bold",
+                              p.averageScore != null ? getScoreColor(p.averageScore) : "text-muted-foreground",
+                            )}
+                          >
+                            {p.averageScore != null ? p.averageScore.toFixed(1) : "—"}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    rollup?.partAverageScore != null && (
+                      <span
+                        className={cn(
+                          "text-sm tabular-nums font-bold shrink-0 pl-6 sm:pl-0",
+                          getScoreColor(rollup.partAverageScore),
+                        )}
+                      >
+                        {rollup.partAverageScore.toFixed(1)}
+                      </span>
+                    )
+                  ))}
               </button>
               {!open && collapsedBullets.length > 0 && (
                 <ul className="px-3 pb-2 pt-2 text-xs text-muted-foreground leading-snug border-t border-border/40 list-disc pl-5 space-y-1">
                   {collapsedBullets.map((b) => (
-                    <li key={b.key}>{b.content}</li>
+                    <li
+                      key={b.key}
+                      className={cn(b.packId ? packTheme(b.packId).bullet : undefined)}
+                    >
+                      {b.content}
+                    </li>
                   ))}
                 </ul>
               )}
               {open && (
                 <div className="divide-y divide-border/50">
-                  {rows.map((row) => (
-                    <div key={row.id} className="px-3 py-2.5 text-xs space-y-1">
+                  {displayRows.map((row, idx) => {
+                    const packRollup =
+                      isGenrePart && row.genrePack
+                        ? partGenreRollups.find((p) => p.packId === row.genrePack)
+                        : undefined;
+                    const showPackHeader =
+                      isGenrePart &&
+                      hasMultiGenre &&
+                      row.genrePack &&
+                      (idx === 0 || displayRows[idx - 1].genrePack !== row.genrePack);
+                    const rowTheme = row.genrePack ? packTheme(row.genrePack) : null;
+                    return (
+                    <div key={row.id}>
+                      {showPackHeader && (
+                        <div
+                          className={cn(
+                            "px-3 py-2 flex items-center justify-between gap-2 border-b border-border/40",
+                            rowTheme?.headerBg,
+                          )}
+                        >
+                          <p className={cn("text-[11px] font-semibold uppercase tracking-wide", rowTheme?.text)}>
+                            {packLabel(row.genrePack!, langKey)}
+                            <span className="ml-2 font-normal normal-case tracking-normal opacity-80">
+                              {Math.round((packRollup?.weight ?? 0) * 100)}%
+                            </span>
+                          </p>
+                          {packRollup?.averageScore != null && (
+                            <span className={cn("text-sm font-bold tabular-nums", getScoreColor(packRollup.averageScore))}>
+                              {packRollup.averageScore.toFixed(1)}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                    <div
+                      className={cn(
+                        "px-3 py-2.5 text-xs space-y-1",
+                        rowTheme && cn("border-l-4", rowTheme.border),
+                      )}
+                    >
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <span className="font-medium text-foreground">{row.elementVi}</span>
+                        <span className={cn("font-medium", rowTheme?.text ?? "text-foreground")}>{row.elementVi}</span>
                         <div className="flex items-center gap-2">
                           {sourceBadge(row.source, t)}
                           {row.partId !== "red_flag" && row.score != null ? (
@@ -357,7 +493,9 @@ export default function RubricPanel({
                         )}
                       </div>
                     </div>
-                  ))}
+                    </div>
+                    );
+                  })}
                 </div>
               )}
             </div>

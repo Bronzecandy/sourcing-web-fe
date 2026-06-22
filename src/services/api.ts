@@ -10,6 +10,8 @@ import type {
   GamePotentialDetail,
   PotentialBreakdown,
   AiAnalysis,
+  AnalysisPrepareResult,
+  GenrePackResolvedItem,
   ApiResponse,
   LibraryPendingItem,
   DistributionResponse,
@@ -313,21 +315,59 @@ export async function deleteAnalysis(appId: number, analyzedAt?: string): Promis
   await api.delete(`/analysis/${appId}`, { params: analyzedAt ? { analyzedAt } : undefined });
 }
 
+export type AnalysisPrepareSource =
+  | { kind: "database"; appId: number }
+  | { kind: "external"; input: string; platform: "taptap" | "steam" }
+  | { kind: "csv"; file: File };
+
+export async function prepareAnalysis(
+  source: AnalysisPrepareSource,
+  overridePackIds?: string[],
+): Promise<AnalysisPrepareResult> {
+  if (source.kind === "csv") {
+    const formData = new FormData();
+    formData.append("file", source.file);
+    if (overridePackIds?.length) {
+      formData.append("overridePackIds", JSON.stringify(overridePackIds));
+    }
+    const { data } = await api.post<ApiResponse<AnalysisPrepareResult>>(
+      "/analysis/prepare-csv",
+      formData,
+      { headers: { "Content-Type": "multipart/form-data" }, timeout: 120_000 },
+    );
+    return data.data;
+  }
+
+  const body: Record<string, unknown> =
+    source.kind === "database"
+      ? { source: "database", appId: source.appId }
+      : { source: "external", input: source.input, platform: source.platform };
+  if (overridePackIds?.length) body.overridePackIds = overridePackIds;
+
+  const { data } = await api.post<ApiResponse<AnalysisPrepareResult>>(
+    "/analysis/prepare",
+    body,
+    { timeout: 120_000 },
+  );
+  return data.data;
+}
+
 export async function triggerAnalysis(
   appId: number,
   reviewWindow?: ReviewWindow,
   onProgress?: (p: AnalysisProgressUpdate) => void,
+  genrePacks?: GenrePackResolvedItem[],
 ): Promise<AiAnalysis> {
+  const payload = {
+    reviewWindow: reviewWindow ?? { mode: "all" },
+    ...(genrePacks?.length ? { genrePacks } : {}),
+  };
   if (onProgress) {
-    return postAnalysisStream(
-      `/analysis/analyze/${appId}`,
-      { reviewWindow: reviewWindow ?? { mode: "all" } },
-      onProgress,
-    );
+    return postAnalysisStream(`/analysis/analyze/${appId}`, payload, onProgress);
   }
   const { data } = await api.post<ApiResponse<AiAnalysis>>(
     `/analysis/analyze/${appId}`,
-    { reviewWindow: reviewWindow ?? { mode: "all" } },
+    payload,
     { timeout: 300_000 },
   );
   return data.data;
@@ -338,17 +378,20 @@ export async function triggerExternalAnalysis(
   platform: "taptap" | "steam" = "taptap",
   reviewWindow?: ReviewWindow,
   onProgress?: (p: AnalysisProgressUpdate) => void,
+  genrePacks?: GenrePackResolvedItem[],
 ): Promise<AiAnalysis> {
+  const payload = {
+    input,
+    platform,
+    reviewWindow: reviewWindow ?? { mode: "all" },
+    ...(genrePacks?.length ? { genrePacks } : {}),
+  };
   if (onProgress) {
-    return postAnalysisStream(
-      "/analysis/analyze-external",
-      { input, platform, reviewWindow: reviewWindow ?? { mode: "all" } },
-      onProgress,
-    );
+    return postAnalysisStream("/analysis/analyze-external", payload, onProgress);
   }
   const { data } = await api.post<ApiResponse<AiAnalysis>>(
     "/analysis/analyze-external",
-    { input, platform, reviewWindow: reviewWindow ?? { mode: "all" } },
+    payload,
     { timeout: 600_000 },
   );
   return data.data;
@@ -358,13 +401,17 @@ export async function triggerCsvAnalysis(
   file: File,
   reviewWindow?: ReviewWindow,
   onProgress?: (p: AnalysisProgressUpdate) => void,
+  genrePacks?: GenrePackResolvedItem[],
 ): Promise<AiAnalysis> {
   if (onProgress) {
-    return postCsvAnalysisStream(file, reviewWindow ?? { mode: "all" }, onProgress);
+    return postCsvAnalysisStream(file, reviewWindow ?? { mode: "all" }, onProgress, genrePacks);
   }
   const formData = new FormData();
   formData.append("file", file);
   formData.append("reviewWindow", JSON.stringify(reviewWindow ?? { mode: "all" }));
+  if (genrePacks?.length) {
+    formData.append("genrePacks", JSON.stringify(genrePacks));
+  }
   const { data } = await api.post<ApiResponse<AiAnalysis>>("/analysis/analyze-csv", formData, {
     timeout: 600_000,
     headers: { "Content-Type": "multipart/form-data" },

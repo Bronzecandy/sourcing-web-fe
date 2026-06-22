@@ -1,10 +1,11 @@
-import { Outlet } from "react-router-dom";
+import { Outlet, useLocation } from "react-router-dom";
 import Sidebar from "./Sidebar";
 import ContentLangToggle from "@/components/ContentLangToggle";
 import { useUiCopy } from "@/lib/use-ui-copy";
 
 export default function Layout() {
   const { t } = useUiCopy();
+  const location = useLocation();
   return (
     <div className="min-h-screen bg-background">
       <Sidebar />
@@ -15,7 +16,7 @@ export default function Layout() {
             <ContentLangToggle />
           </div>
         </div>
-        <Outlet />
+        <Outlet key={location.pathname} />
       </main>
     </div>
   );

@@ -14,19 +14,21 @@ import AnalysisSourceBadge from "@/components/AnalysisSourceBadge";
 import StoreLinkChips from "@/components/StoreLinkChips";
 import { analysisStoreLinks } from "@/lib/store-links";
 import { Brain, Search, Sparkles, ExternalLink, Trash2, Globe, Upload, FileSpreadsheet, X } from "lucide-react";
+import AnalysisConfirmWizard from "@/components/AnalysisConfirmWizard";
 import {
   triggerExternalAnalysis,
   triggerCsvAnalysis,
   deleteAnalysis,
   fetchAllAnalyses,
   type AnalysisListScope,
+  type AnalysisPrepareSource,
 } from "@/services/api";
 import { useAuth } from "@/contexts/AuthContext";
 import { hasPermission } from "@/lib/permissions";
 import { cn, getScoreColor } from "@/lib/utils";
 import { useUiCopy } from "@/lib/use-ui-copy";
 import { DEFAULT_REVIEW_WINDOW, type ReviewWindow } from "@/types/review-window";
-import type { AiAnalysis } from "@/types";
+import type { AiAnalysis, GenrePackResolvedItem } from "@/types";
 
 export default function AIAnalysisPage() {
   const [input, setInput] = useState("");
@@ -42,6 +44,10 @@ export default function AIAnalysisPage() {
   const { user } = useAuth();
   const canDelete = hasPermission(user, "ai.delete");
   const [listScope, setListScope] = useState<AnalysisListScope>("all");
+  const [wizardOpen, setWizardOpen] = useState(false);
+  const [prepareSource, setPrepareSource] = useState<AnalysisPrepareSource | null>(null);
+  const [pendingExternal, setPendingExternal] = useState<{ input: string; platform: "taptap" | "steam" } | null>(null);
+  const [pendingCsvFile, setPendingCsvFile] = useState<File | null>(null);
 
   const { data: savedAnalyses = [] } = useQuery({
     queryKey: ["all-analyses", listScope],
@@ -57,8 +63,18 @@ export default function AIAnalysisPage() {
   );
 
   const analyzeMutation = useMutation({
-    mutationFn: (args: { input: string; platform: "taptap" | "steam" }) =>
-      triggerExternalAnalysis(args.input, args.platform, reviewWindow, onAnalysisProgress),
+    mutationFn: (args: {
+      input: string;
+      platform: "taptap" | "steam";
+      genrePacks?: GenrePackResolvedItem[];
+    }) =>
+      triggerExternalAnalysis(
+        args.input,
+        args.platform,
+        reviewWindow,
+        onAnalysisProgress,
+        args.genrePacks,
+      ),
     onMutate: () => setAnalysisProgress(INITIAL_ANALYSIS_PROGRESS),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["all-analyses"] });
@@ -68,7 +84,8 @@ export default function AIAnalysisPage() {
   });
 
   const csvMutation = useMutation({
-    mutationFn: (file: File) => triggerCsvAnalysis(file, reviewWindow, onAnalysisProgress),
+    mutationFn: (args: { file: File; genrePacks?: GenrePackResolvedItem[] }) =>
+      triggerCsvAnalysis(args.file, reviewWindow, onAnalysisProgress, args.genrePacks),
     onMutate: () => setAnalysisProgress(INITIAL_ANALYSIS_PROGRESS),
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["all-analyses"] });
@@ -83,12 +100,27 @@ export default function AIAnalysisPage() {
   const handleSubmit = () => {
     const trimmed = input.trim();
     if (!trimmed) return;
-    analyzeMutation.mutate({ input: trimmed, platform: externalPlatform });
+    setPendingExternal({ input: trimmed, platform: externalPlatform });
+    setPendingCsvFile(null);
+    setPrepareSource({ kind: "external", input: trimmed, platform: externalPlatform });
+    setWizardOpen(true);
   };
 
   const handleCsvSubmit = () => {
     if (!csvFile) return;
-    csvMutation.mutate(csvFile);
+    setPendingCsvFile(csvFile);
+    setPendingExternal(null);
+    setPrepareSource({ kind: "csv", file: csvFile });
+    setWizardOpen(true);
+  };
+
+  const handleWizardConfirm = (genrePacks: GenrePackResolvedItem[]) => {
+    setWizardOpen(false);
+    if (pendingExternal) {
+      analyzeMutation.mutate({ ...pendingExternal, genrePacks });
+    } else if (pendingCsvFile) {
+      csvMutation.mutate({ file: pendingCsvFile, genrePacks });
+    }
   };
 
   const handleFileDrop = (e: React.DragEvent) => {
@@ -323,6 +355,12 @@ export default function AIAnalysisPage() {
         )}
       </div>
 
+      <AnalysisConfirmWizard
+        open={wizardOpen}
+        onClose={() => setWizardOpen(false)}
+        source={prepareSource}
+        onConfirm={handleWizardConfirm}
+      />
     </div>
   );
 }

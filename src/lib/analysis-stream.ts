@@ -96,11 +96,15 @@ export async function postCsvAnalysisStream(
   file: File,
   reviewWindow: unknown,
   onProgress: (p: AnalysisProgressUpdate) => void,
+  genrePacks?: Array<{ packId: string; weight: number }>,
 ): Promise<AiAnalysis> {
   const formData = new FormData();
   formData.append("file", file);
   formData.append("reviewWindow", JSON.stringify(reviewWindow ?? { mode: "all" }));
   formData.append("stream", "true");
+  if (genrePacks?.length) {
+    formData.append("genrePacks", JSON.stringify(genrePacks));
+  }
 
   const res = await fetch(`${API_BASE}/analysis/analyze-csv`, {
     method: "POST",

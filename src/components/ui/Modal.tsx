@@ -35,6 +35,10 @@ export default function Modal({
     };
   }, [open, onClose]);
 
+  useEffect(() => () => {
+    document.body.style.overflow = "";
+  }, []);
+
   if (!open) return null;
 
   return (

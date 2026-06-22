@@ -1,5 +1,5 @@
 import { lazy, Suspense, useEffect } from "react";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Outlet } from "react-router-dom";
 import Layout from "./components/layout/Layout";
 import { ContentLangProvider } from "./lib/content-language";
 import { AuthProvider } from "./contexts/AuthContext";
@@ -79,8 +79,11 @@ export default function App() {
                   <Route path="/game/:id" element={<GameDetail />} />
                   <Route path="/potential" element={<Potential />} />
                   <Route path="/distribution" element={<Distribution />} />
-                  <Route path="/ai-analysis/a/:analysisId" element={<AnalysisDetail />} />
-                  <Route path="/ai-analysis" element={<AIAnalysis />} />
+                  {/* More specific path first; parent Outlet renders nested child */}
+                  <Route path="/ai-analysis" element={<Outlet />}>
+                    <Route path="a/:analysisId" element={<AnalysisDetail />} />
+                    <Route index element={<AIAnalysis />} />
+                  </Route>
                   <Route path="/libraries" element={<Libraries />} />
                   <Route path="/admin/users" element={<AdminUsers />} />
                 </Route>
