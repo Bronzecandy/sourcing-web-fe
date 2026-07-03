@@ -11,7 +11,7 @@ import type { PotentialScore, PotentialSegment } from "@/types";
 import { LaunchBoardTags } from "@/components/LaunchBoardTags";
 import StoreLinkChips from "@/components/StoreLinkChips";
 import { gameStoreLinks } from "@/lib/store-links";
-import { cn, getScoreColor, getTrendIcon, formatNumber } from "@/lib/utils";
+import { cn, getScoreColor, getTrendIcon, formatNumber, formatGrowthRatePct } from "@/lib/utils";
 import { formatDelta } from "@/lib/chart-delta";
 import { useUiCopy, potentialRadarMetric } from "@/lib/use-ui-copy";
 
@@ -121,23 +121,23 @@ export default function Potential() {
   const growthSubtitle =
     selectedSegment === "reserve"
       ? t(
-          "Xếp theo tăng đăng ký trước tuyệt đối + đà leo hạng — game nhỏ tăng nhanh nổi lên",
-          "Ranked by absolute pre-reg growth + chart climb — surfaces fast-growing smaller games",
+          "Xếp theo điểm TT — tăng trưởng chuẩn hóa percentile cùng kỳ (có trần tuyệt đối) + đánh giá + chất lượng hạng",
+          "Ranked by momentum — cohort percentile growth (absolute cap) + rating + rank quality",
         )
       : t(
-          "Xếp theo tăng download tuyệt đối + đà leo hạng",
-          "Ranked by absolute download growth + chart climb",
+          "Xếp theo điểm TT — tăng download percentile cùng kỳ (có trần tuyệt đối) + đánh giá + chất lượng hạng",
+          "Ranked by momentum — cohort percentile download growth (absolute cap) + rating + rank quality",
         );
 
   const stableSubtitle =
     selectedSegment === "reserve"
       ? t(
-          "Xếp theo điểm tổng hợp v11 — ưu tiên quy mô & base lớn ổn định",
-          "Composite algo v11 — favors large stable audience base",
+          "Xếp theo điểm tổng hợp v12 — ưu tiên quy mô & base lớn ổn định",
+          "Composite algo v12 — favors large stable audience base",
         )
       : t(
-          "Xếp theo điểm tổng hợp v17 — base lớn & vị thế BXH ổn định",
-          "Composite algo v17 — large base & stable chart position",
+          "Xếp theo điểm tổng hợp v18 — base lớn & vị thế BXH ổn định",
+          "Composite algo v18 — large base & stable chart position",
         );
 
   const activeTableScores = tableView === "growth" ? growthScores : stableScores;
@@ -403,7 +403,7 @@ export default function Potential() {
                                 : "bg-muted text-muted-foreground",
                           )}
                         >
-                          +{g.growthRate}%
+                          {formatGrowthRatePct(g.growthRate)}
                         </span>
                       </td>
                     </tr>
@@ -450,10 +450,7 @@ function PotentialRankingTable({
   t: (vi: string, en: string) => string;
 }) {
   const isGrowth = variant === "growth";
-  const growthLabel =
-    segment === "reserve"
-      ? t("Tăng đăng ký", "Pre-reg growth")
-      : t("Tăng download", "Download growth");
+  const audienceColLabel = isGrowth ? t("Tăng trưởng", "Growth") : t("Quy mô & TT", "Audience");
 
   return (
     <div className="bg-card rounded-xl border border-border overflow-hidden">
@@ -498,17 +495,12 @@ function PotentialRankingTable({
                     </th>
                   </>
                 )}
-                <th className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase">{t("Quy mô & TT", "Audience")}</th>
-                {isGrowth && (
-                  <th className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase whitespace-nowrap">
-                    {growthLabel}
-                  </th>
-                )}
+                <th className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase">{audienceColLabel}</th>
                 <th className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase">{t("Đánh giá", "Rating")}</th>
                 <th className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase">{t("Chất lượng hạng", "Rank")}</th>
                 <th className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase">{t("Tin cậy", "Conf.")}</th>
                 <th className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
-                  {isGrowth ? t("Điểm TT", "Momentum") : t("Điểm", "Score")}
+                  {t("Điểm", "Score")}
                 </th>
                 <th className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase">{t("Xu hướng", "Trend")}</th>
               </tr>
@@ -564,36 +556,8 @@ function PotentialRankingTable({
                     </>
                   )}
                   <td className="px-3 py-3">
-                    <ScoreBar value={s.audienceScore ?? s.scaleScore ?? 0} />
+                    <ScoreBar value={isGrowth ? (s.momentumGrowthNorm ?? 0) : (s.audienceScore ?? s.scaleScore ?? 0)} />
                   </td>
-                  {isGrowth && (
-                    <td className="px-3 py-3 text-sm whitespace-nowrap">
-                      {s.audienceGrowthAbsolute != null ? (
-                        <div className="flex flex-col gap-0.5">
-                          <span
-                            className={cn(
-                              "font-semibold tabular-nums",
-                              s.audienceGrowthAbsolute > 0
-                                ? "text-up"
-                                : s.audienceGrowthAbsolute < 0
-                                  ? "text-down"
-                                  : "text-muted-foreground",
-                            )}
-                          >
-                            {formatDelta(s.audienceGrowthAbsolute)}
-                          </span>
-                          {s.audienceGrowthRate != null && (
-                            <span className="text-[10px] text-muted-foreground tabular-nums">
-                              {s.audienceGrowthRate > 0 ? "+" : ""}
-                              {s.audienceGrowthRate}%
-                            </span>
-                          )}
-                        </div>
-                      ) : (
-                        <span className="text-muted-foreground">—</span>
-                      )}
-                    </td>
-                  )}
                   <td className="px-3 py-3">
                     <ScoreBar value={s.ratingScore} />
                   </td>
@@ -604,20 +568,14 @@ function PotentialRankingTable({
                     <ConfidenceBadge value={s.dataConfidence} />
                   </td>
                   <td className="px-3 py-3">
-                    {isGrowth ? (
-                      <span
-                        className={cn(
-                          "text-sm font-bold tabular-nums",
-                          getScoreColor(s.momentumScore ?? 0),
-                        )}
-                      >
-                        {(s.momentumScore ?? 0).toFixed(1)}
-                      </span>
-                    ) : (
-                      <span className={cn("text-sm font-bold", getScoreColor(s.compositeScore))}>
-                        {(s.compositeScore ?? 0).toFixed(1)}
-                      </span>
-                    )}
+                    <span
+                      className={cn(
+                        "text-sm font-bold",
+                        getScoreColor(isGrowth ? (s.momentumScore ?? 0) : (s.compositeScore ?? 0)),
+                      )}
+                    >
+                      {(isGrowth ? (s.momentumScore ?? 0) : (s.compositeScore ?? 0)).toFixed(1)}
+                    </span>
                   </td>
                   <td className="px-3 py-3">
                     <span

@@ -29,7 +29,7 @@ import { buildFanReserveDeltaSeries, formatDelta } from "@/lib/chart-delta";
 import { momentumBreakdown } from "@/lib/momentum-score";
 import AnalysisConfirmWizard from "@/components/AnalysisConfirmWizard";
 import { useUiCopy, potentialRadarMetric } from "@/lib/use-ui-copy";
-import { cn, formatNumber, getScoreColor } from "@/lib/utils";
+import { cn, formatNumber, formatGrowthRatePct, getScoreColor } from "@/lib/utils";
 import type { AiAnalysis, GameReview, GamePotentialDetail, PotentialBreakdown, GenrePackResolvedItem } from "@/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { hasPermission } from "@/lib/permissions";
@@ -785,6 +785,14 @@ function PotentialSection({
   const radarData = useMemo(() => {
     if (!detail) return [];
     const aud = detail.audience ?? detail.scale;
+    if (isGrowthView) {
+      const growthNorm = detail.momentumGrowthNorm ?? 0;
+      return [
+        { metric: t("Tăng trưởng", "Growth"), value: growthNorm },
+        { metric: potentialRadarMetric("Rating", lang), value: detail.rating.score },
+        { metric: potentialRadarMetric("RankQuality", lang), value: detail.rankQuality.score },
+      ];
+    }
     const items = [
       { metric: potentialRadarMetric("Audience", lang), value: aud?.score ?? 0 },
       { metric: potentialRadarMetric("Rating", lang), value: detail.rating.score },
@@ -801,7 +809,7 @@ function PotentialSection({
       });
     }
     return items;
-  }, [detail, lang, isLaunch]);
+  }, [detail, lang, isLaunch, isGrowthView, t]);
 
   const aud = detail?.audience ?? detail?.scale;
   const ra = detail?.rating;
@@ -818,9 +826,21 @@ function PotentialSection({
   const boardRank = isGrowthView ? detail?.potentialRankGrowth : detail?.potentialRankStable;
   const boardScore = isGrowthView ? (detail?.momentumScore ?? 0) : (detail?.compositeScore ?? 0);
   const momentum = useMemo(() => {
-    if (!aud || !rq || !isGrowthView) return null;
-    return momentumBreakdown(aud.growthBonus, rq.movementScore);
-  }, [aud, rq, isGrowthView]);
+    if (!ra || !rq || !isGrowthView || detail?.momentumGrowthNorm == null) return null;
+    return momentumBreakdown(detail.momentumGrowthNorm, ra.score, rq.score);
+  }, [detail?.momentumGrowthNorm, ra, rq, isGrowthView]);
+
+  const analysisDays = detail?.confidence?.analysisDays ?? lifecycle?.reserveWindowDays ?? 14;
+  const growthPerDay =
+    detail?.audienceGrowthAbsolute != null ? detail.audienceGrowthAbsolute / Math.max(analysisDays, 1) : null;
+  const growthAnchors = detail?.momentumGrowthPerDayAnchors;
+  const anchorHelp =
+    growthAnchors != null
+      ? t(
+          `Phổ tăng/ngày (hiệu chỉnh 7+14+30 ngày): p50 ${formatNumber(growthAnchors.p50)}/ngày · p75 ${formatNumber(growthAnchors.p75)} · p90 ${formatNumber(growthAnchors.p90)} · p95 ${formatNumber(growthAnchors.p95)}`,
+          `Per-day growth spectrum (7+14+30d calibration): p50 ${formatNumber(growthAnchors.p50)}/d · p75 ${formatNumber(growthAnchors.p75)} · p90 ${formatNumber(growthAnchors.p90)} · p95 ${formatNumber(growthAnchors.p95)}`,
+        )
+      : undefined;
 
   return (
     <div className="bg-card rounded-xl border border-border p-5">
@@ -894,17 +914,17 @@ function PotentialSection({
       <p className="text-xs text-muted-foreground mb-4 -mt-2">
         {isGrowthView
           ? t(
-              "Bảng Tăng trưởng: 75% tốc độ tăng tuyệt đối + 25% đà leo hạng — ưu tiên game nhỏ tăng nhanh.",
-              "Growth board: 75% absolute growth rate + 25% chart climb — favors fast-growing smaller games.",
+              "Bảng Tăng trưởng: 60% chuẩn hóa percentile cùng kỳ (có trần tuyệt đối) + 20% đánh giá + 20% chất lượng hạng.",
+              "Growth board: 60% cohort percentile growth (absolute cap) + 20% rating + 20% rank quality.",
             )
           : isLaunch
             ? t(
-                "Bảng Quy mô: điểm tổng hợp v17 — quy mô, BXH Launch và vị thế ổn định.",
-                "Scale board: composite v17 — scale, launch charts, and stable placement.",
+                "Bảng Quy mô: điểm tổng hợp v18 — quy mô, BXH Launch và vị thế ổn định.",
+                "Scale board: composite v18 — scale, launch charts, and stable placement.",
               )
             : t(
-                "Bảng Quy mô: điểm tổng hợp v11 — quy mô audience, rating và chất lượng hạng.",
-                "Scale board: composite v11 — audience scale, rating, and rank quality.",
+                "Bảng Quy mô: điểm tổng hợp v12 — quy mô audience, rating và chất lượng hạng.",
+                "Scale board: composite v12 — audience scale, rating, and rank quality.",
               )}
       </p>
 
@@ -943,8 +963,8 @@ function PotentialSection({
                 <div className="bg-muted/20 rounded-lg px-3 py-2 text-[10px] text-muted-foreground space-y-1">
                   <p>
                     <span className="font-medium text-foreground">{t("Công thức", "Formula")}</span>{" "}
-                    = 75% × {t("chuẩn hóa tăng trưởng", "growth normalization")} + 25% × {t("đà leo hạng", "movement")}
-                    {" "}= {momentum.growthPart} + {momentum.movementPart} = {momentum.total}
+                    = 60% × {t("tăng trưởng", "growth")} + 20% × {t("đánh giá", "rating")} + 20% × {t("chất lượng hạng", "rank")}
+                    {" "}= {momentum.growthPart} + {momentum.ratingPart} + {momentum.rankPart} = {momentum.total}
                   </p>
                   <p>
                     {t(
@@ -995,119 +1015,105 @@ function PotentialSection({
           </div>
 
           <div className="grid gap-4 md:grid-cols-2">
-            {isGrowthView && aud && rq && momentum ? (
-              <>
-                <FactorCard
-                  icon={<TrendingUp className="w-4 h-4" />}
-                  label={t("Tăng trưởng tuyệt đối", "Absolute growth")}
-                  weight="75%"
-                  score={momentum.growthNorm}
-                  description={t(
-                    `Tốc độ tăng ${scaleMetricLabel(aud.metric)} trong cửa sổ. Bonus tier cộng vào điểm nền 50 rồi chuẩn hóa 0–100 — không giảm trọng số vì base lớn như bảng Quy mô.`,
-                    `${scaleMetricLabel(aud.metric)} growth in the window. Tier bonus adds to base 50 then normalizes 0–100 — not down-weighted for large base unlike the Scale board.`,
-                  )}
-                  rows={[
-                    {
-                      label: t("Delta đầu kỳ → hiện tại", "Start → end delta"),
-                      value:
-                        aud.start != null && aud.end != null ? (
-                          <span className="block text-right">
-                            <span className="block">
-                              {formatNumber(aud.start)} → {formatNumber(aud.end)}
-                            </span>
-                            <span className="block text-[10px] mt-0.5">
-                              {detail.audienceGrowthAbsolute != null ? formatDelta(detail.audienceGrowthAbsolute) : formatDelta(aud.delta)}
-                              {detail.audienceGrowthRate != null && (
-                                <span className="text-muted-foreground">
-                                  {" "}
-                                  ({detail.audienceGrowthRate > 0 ? "+" : ""}
-                                  {detail.audienceGrowthRate}%)
-                                </span>
-                              )}
-                            </span>
+            {isGrowthView && aud && momentum ? (
+              <FactorCard
+                icon={<TrendingUp className="w-4 h-4" />}
+                label={t("Tăng trưởng tuyệt đối", "Absolute growth")}
+                weight="60%"
+                score={momentum.growthNorm}
+                description={t(
+                  `Chuẩn hóa tăng ${scaleMetricLabel(aud.metric)}: (1) xếp hạng percentile delta tuyệt đối trong ${detail.momentumGrowthCohortSize ?? "—"} game cùng bảng cùng kỳ; (2) trần theo tốc độ tăng/ngày so phân phối lịch sử gộp 7+14+30 ngày — lấy min(2) để game chỉ tăng nhẹ không được điểm cao dù ít đối thủ tăng.`,
+                  `${scaleMetricLabel(aud.metric)} normalization: (1) percentile rank of absolute delta vs ${detail.momentumGrowthCohortSize ?? "—"} same-board peers; (2) cap from per-day growth vs 7+14+30d historical distribution — final = min(both) so mild growth cannot score high when few peers grew.`,
+                )}
+                rows={[
+                  {
+                    label: t("Delta đầu kỳ → hiện tại", "Start → end delta"),
+                    value:
+                      aud.start != null && aud.end != null ? (
+                        <span className="block text-right">
+                          <span className="block">
+                            {formatNumber(aud.start)} → {formatNumber(aud.end)}
                           </span>
-                        ) : (
-                          t("Chưa đủ dữ liệu", "Not enough data")
-                        ),
-                    },
-                    {
-                      label: t("Bonus tier Phân phối", "Distribution tier bonus"),
-                      badge: aud.growthTierLabel ?? undefined,
-                      value: t("Theo delta tuyệt đối trong kỳ", "From absolute delta in window"),
-                      points: aud.growthBonus,
-                      pointsTone: "bonus",
-                      help: t(
-                        "Điểm cộng theo mốc tăng trưởng Phân phối — có thể âm nếu giảm.",
-                        "Additive points from Distribution growth buckets — may be negative if declining.",
+                          <span className="block text-[10px] mt-0.5 tabular-nums">
+                            {detail.audienceGrowthAbsolute != null
+                              ? formatDelta(detail.audienceGrowthAbsolute)
+                              : formatDelta(aud.delta)}
+                            {detail.audienceGrowthRate != null && (
+                              <span className="text-muted-foreground">
+                                {" "}
+                                ({formatGrowthRatePct(detail.audienceGrowthRate)})
+                              </span>
+                            )}
+                            {growthPerDay != null && (
+                              <span className="block text-muted-foreground">
+                                ≈ {formatNumber(Math.round(growthPerDay))}/{t("ngày", "day")}
+                              </span>
+                            )}
+                          </span>
+                        </span>
+                      ) : (
+                        t("Chưa đủ dữ liệu", "Not enough data")
                       ),
-                    },
-                    {
-                      label: t("Chuẩn hóa", "Normalization"),
-                      badge: "0–100",
-                      value: t("50 + bonus tier, giới hạn 0–100", "50 + tier bonus, clamped 0–100"),
-                      points: momentum.growthNorm,
-                      help: t(
-                        "Điểm trụ trước khi nhân trọng số 75%.",
-                        "Pillar score before applying the 75% weight.",
-                      ),
-                      formula: `50 ${aud.growthBonus >= 0 ? "+" : ""}${aud.growthBonus} = ${momentum.growthNorm}`,
-                    },
-                    {
-                      label: t("Tổng", "Total"),
-                      isTotal: true,
-                      value: t(
-                        `Đóng góp Potential: ×75% = ${momentum.growthPart}`,
-                        `Potential contribution: ×75% = ${momentum.growthPart}`,
-                      ),
-                      points: momentum.growthPart,
-                      formula: `${momentum.growthNorm} × 0.75 = ${momentum.growthPart}`,
-                    },
-                  ]}
-                />
-                <FactorCard
-                  icon={<Activity className="w-4 h-4" />}
-                  label={t("Đà leo hạng", "Chart climb")}
-                  weight="25%"
-                  score={rq.movementScore}
-                  description={t(
-                    "Leo hạng BXH trong kỳ — thưởng game bùng nổ leo top, không phạt game đã giữ đỉnh ổn định.",
-                    "Chart rank climb in the window — rewards breakouts, doesn't penalize games holding a stable peak.",
-                  )}
-                  rows={[
-                    {
-                      label: t("Hạng đầu → cuối", "Rank start → end"),
-                      value: `#${rq.rankStart} → #${rq.rankEnd} (${rq.change >= 0 ? "+" : ""}${rq.change})`,
-                      points: rq.movementScore,
-                      help: t(
-                        "Điểm đà 0–100 trước khi nhân trọng số 25%.",
-                        "Movement score 0–100 before applying the 25% weight.",
-                      ),
-                    },
-                    {
-                      label: t("Hạng tốt nhất", "Best rank"),
-                      badge: "min",
-                      value: `#${rq.bestRank}`,
-                    },
-                    {
-                      label: t("Tổng", "Total"),
-                      isTotal: true,
-                      value: t(
-                        `Đóng góp Potential: ×25% = ${momentum.movementPart}`,
-                        `Potential contribution: ×25% = ${momentum.movementPart}`,
-                      ),
-                      points: momentum.movementPart,
-                      formula: `${rq.movementScore.toFixed(1)} × 0.25 = ${momentum.movementPart}`,
-                      help: t(
-                        `Cộng với tăng trưởng (${momentum.growthPart}) → ${momentum.total} điểm`,
-                        `Plus growth (${momentum.growthPart}) → ${momentum.total} total`,
-                      ),
-                    },
-                  ]}
-                />
-              </>
-            ) : isGrowthView ? null : (
-              <>
-            {aud && (
+                  },
+                  {
+                    label: t("Percentile cùng kỳ", "Cohort percentile"),
+                    badge:
+                      detail.momentumGrowthCohortSize != null
+                        ? `${detail.momentumGrowthCohortSize} game`
+                        : undefined,
+                    value:
+                      detail.momentumGrowthPercentile != null
+                        ? t(
+                            `≈ top ${Math.max(1, Math.round(100 - detail.momentumGrowthPercentile))}%`,
+                            `≈ top ${Math.max(1, Math.round(100 - detail.momentumGrowthPercentile))}%`,
+                          )
+                        : t("Chưa có cohort", "No cohort"),
+                    points: detail.momentumGrowthPercentile,
+                    help: t(
+                      "So sánh delta tuyệt đối với mọi game cùng bảng trong cửa sổ — điểm cao = tăng nhanh hơn đa số đối thủ cùng kỳ.",
+                      "Absolute delta ranked against all same-board games in the window — higher = faster growth than most peers.",
+                    ),
+                  },
+                  {
+                    label: t("Trần tuyệt đối/ngày", "Absolute per-day cap"),
+                    badge: "7+14+30d",
+                    value:
+                      growthPerDay != null
+                        ? `${formatNumber(Math.round(growthPerDay))}/${t("ngày", "day")}`
+                        : t("—", "—"),
+                    points: detail.momentumGrowthAbsCap,
+                    help: anchorHelp ?? t(
+                      "Percentile của tốc độ tăng/ngày so mẫu lịch sử 7+14+30 ngày — ghìm game tăng nhẹ.",
+                      "Percentile of per-day growth vs 7+14+30-day historical sample — caps mild growers.",
+                    ),
+                  },
+                  {
+                    label: t("Chuẩn hóa", "Normalization"),
+                    badge: "min",
+                    value: t("min(percentile, trần)", "min(cohort, cap)"),
+                    points: momentum.growthNorm,
+                    help: t(
+                      "Điểm trụ tăng trưởng trước khi nhân 60% vào điểm TT.",
+                      "Growth pillar score before applying 60% toward momentum.",
+                    ),
+                    formula:
+                      detail.momentumGrowthPercentile != null && detail.momentumGrowthAbsCap != null
+                        ? `min(${detail.momentumGrowthPercentile}, ${detail.momentumGrowthAbsCap}) = ${momentum.growthNorm}`
+                        : undefined,
+                  },
+                  {
+                    label: t("Tổng", "Total"),
+                    isTotal: true,
+                    value: t(
+                      `Đóng góp điểm TT: ${momentum.growthNorm} × 60% = ${momentum.growthPart}`,
+                      `Momentum contribution: ${momentum.growthNorm} × 60% = ${momentum.growthPart}`,
+                    ),
+                    points: momentum.growthNorm,
+                    formula: `${momentum.growthNorm} × 0.6 = ${momentum.growthPart}`,
+                  },
+                ]}
+              />
+            ) : aud ? (
               <FactorCard
                 icon={<Database className="w-4 h-4" />}
                 label={audienceL}
@@ -1173,12 +1179,12 @@ function PotentialSection({
                   },
                 ]}
               />
-            )}
+            ) : null}
             {ra && (
               <FactorCard
                 icon={<Star className="w-4 h-4" />}
                 label={ratingL}
-                weight={`${Math.round(wRating * 100)}%`}
+                weight={isGrowthView ? "20%" : `${Math.round(wRating * 100)}%`}
                 score={ra.score}
                 description={t(
                   "Base từ rating ĐẦU KỲ (8★→60, 10★→90) + ±5đ mỗi 0.1 thay đổi. Rating cao giữ nguyên không bị trừ vì không tăng thêm.",
@@ -1222,12 +1228,20 @@ function PotentialSection({
                   {
                     label: t("Tổng", "Total"),
                     isTotal: true,
-                    value: t("Base + điều chỉnh", "Base + adjustment"),
+                    value:
+                      isGrowthView && momentum
+                        ? t(
+                            `Đóng góp điểm TT: ${ra.score} × 20% = ${momentum.ratingPart}`,
+                            `Momentum contribution: ${ra.score} × 20% = ${momentum.ratingPart}`,
+                          )
+                        : t("Base + điều chỉnh", "Base + adjustment"),
                     points: ra.score,
                     formula:
-                      ra.start != null
-                        ? `${ra.baseValue} + ${ra.deltaAdjustment >= 0 ? "+" : ""}${ra.deltaAdjustment} = ${ra.score}`
-                        : undefined,
+                      isGrowthView && momentum
+                        ? `${ra.score} × 0.2 = ${momentum.ratingPart}`
+                        : ra.start != null
+                          ? `${ra.baseValue} + ${ra.deltaAdjustment >= 0 ? "+" : ""}${ra.deltaAdjustment} = ${ra.score}`
+                          : undefined,
                   },
                 ]}
               />
@@ -1236,7 +1250,7 @@ function PotentialSection({
               <FactorCard
                 icon={<Shield className="w-4 h-4" />}
                 label={rankL}
-                weight={`${Math.round(wRank * 100)}%`}
+                weight={isGrowthView ? "20%" : `${Math.round(wRank * 100)}%`}
                 score={rq.score}
                 description={t(
                   "Gộp vị thế hạng + độ ổn định vào MỘT trụ. Chấm theo bậc hạng (Top 10 = 100, Top 20 = 80, Top 50 = 55...) nên game lẹt đẹt hạng 50 không còn được tính như game top 10.",
@@ -1296,17 +1310,43 @@ function PotentialSection({
                   {
                     label: t("Tổng", "Total"),
                     isTotal: true,
-                    value: t("Vị thế 40 · Top20 20 · Chuỗi 10 · Dao động 10 · Đà 20", "Position 40 · Top20 20 · Streak 10 · Volatility 10 · Movement 20"),
+                    value:
+                      isGrowthView && momentum
+                        ? t(
+                            `Đóng góp điểm TT: ${rq.score} × 20% = ${momentum.rankPart}`,
+                            `Momentum contribution: ${rq.score} × 20% = ${momentum.rankPart}`,
+                          )
+                        : t("Vị thế 40 · Top20 20 · Chuỗi 10 · Dao động 10 · Đà 20", "Position 40 · Top20 20 · Streak 10 · Volatility 10 · Movement 20"),
                     points: rq.score,
-                    help: t(
-                      "Gộp 5 phần trên: ưu tiên vị thế cao và ổn định bền vững, hạn chế thưởng game chỉ 'trụ' ở hạng thấp.",
-                      "Combines the five parts: favors high, durable placement and limits credit for merely lingering at low ranks.",
-                    ),
+                    formula:
+                      isGrowthView && momentum
+                        ? `${rq.score} × 0.2 = ${momentum.rankPart}`
+                        : undefined,
+                    help:
+                      isGrowthView && momentum
+                        ? t(
+                            `Cộng 3 trụ: ${momentum.growthPart} + ${momentum.ratingPart} + ${momentum.rankPart} = ${momentum.total} điểm TT`,
+                            `Sum of pillars: ${momentum.growthPart} + ${momentum.ratingPart} + ${momentum.rankPart} = ${momentum.total} momentum`,
+                          )
+                        : t(
+                            "Gộp 5 phần trên: ưu tiên vị thế cao và ổn định bền vững, hạn chế thưởng game chỉ 'trụ' ở hạng thấp.",
+                            "Combines the five parts: favors high, durable placement and limits credit for merely lingering at low ranks.",
+                          ),
                   },
                 ]}
               />
             )}
-              </>
+            {isGrowthView && momentum && (
+              <div className="md:col-span-2 rounded-lg border border-dashed border-primary/30 bg-primary/5 px-4 py-3 text-xs text-muted-foreground">
+                <p>
+                  <span className="font-semibold text-foreground">{t("Điểm TT", "Momentum")}</span>
+                  {" "}= 60% × {momentum.growthNorm} + 20% × {ra?.score ?? "—"} + 20% × {rq?.score ?? "—"}
+                  {" "}= <span className="font-bold text-foreground tabular-nums">{momentum.growthPart}</span> +{" "}
+                  <span className="font-bold text-foreground tabular-nums">{momentum.ratingPart}</span> +{" "}
+                  <span className="font-bold text-foreground tabular-nums">{momentum.rankPart}</span> ={" "}
+                  <span className={cn("font-bold tabular-nums", getScoreColor(momentum.total))}>{momentum.total}</span>
+                </p>
+              </div>
             )}
           </div>
 

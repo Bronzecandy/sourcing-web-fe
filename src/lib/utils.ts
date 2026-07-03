@@ -26,6 +26,14 @@ export function getScoreColor(score: number): string {
   return "text-down";
 }
 
+/** Hiển thị % tăng trưởng — tránh float dài kiểu 108.77000000000001%. */
+export function formatGrowthRatePct(rate: number | null | undefined): string {
+  if (rate == null || !Number.isFinite(rate)) return "—";
+  const rounded = Math.round(rate * 10) / 10;
+  const prefix = rounded > 0 ? "+" : "";
+  return `${prefix}${rounded}%`;
+}
+
 export function getTrendIcon(trend: "up" | "down" | "stable"): string {
   if (trend === "up") return "↑";
   if (trend === "down") return "↓";

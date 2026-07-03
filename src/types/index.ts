@@ -106,6 +106,12 @@ export interface PotentialScore {
   audienceGrowthAbsolute?: number | null;
   audienceGrowthRate?: number | null;
   momentumScore?: number;
+  momentumGrowthNorm?: number;
+  momentumGrowthPercentile?: number;
+  momentumGrowthAbsCap?: number;
+  momentumGrowthCohortSize?: number;
+  momentumGrowthPerDayAnchors?: { p50: number; p75: number; p90: number; p95: number };
+  momentumMovementScore?: number;
   launchCategory?: LaunchCategory;
   releaseDate?: string | null;
   primaryLaunchBoard?: "pop" | "hot" | "new" | null;
@@ -579,6 +585,12 @@ export interface GamePotentialDetail {
   audienceGrowthAbsolute?: number | null;
   audienceGrowthRate?: number | null;
   momentumScore?: number;
+  momentumGrowthNorm?: number;
+  momentumGrowthPercentile?: number;
+  momentumGrowthAbsCap?: number;
+  momentumGrowthCohortSize?: number;
+  momentumGrowthPerDayAnchors?: { p50: number; p75: number; p90: number; p95: number };
+  momentumMovementScore?: number;
   potentialRankGrowth?: number | null;
   potentialRankStable?: number | null;
   potentialListSize?: number;
