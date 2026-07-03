@@ -21,11 +21,14 @@ import type {
   DistributionOverviewResponse,
   DistributionTrendsResponse,
   DistributionTab,
+  CompareOverview,
+  GameComparisonAI,
+  SavedGameComparison,
 } from "../types";
 import type { ReviewWindow } from "@/types/review-window";
 import type { HistoryRange } from "@/types/history-range";
 import type { AnalysisProgressUpdate } from "@/lib/analysis-stream";
-import { postAnalysisStream, postCsvAnalysisStream } from "@/lib/analysis-stream";
+import { postAnalysisStream, postCsvAnalysisStream, postJsonStream } from "@/lib/analysis-stream";
 import type { AdminMeta, AdminUserRow, AuthUser, PermissionKey, UserRole } from "@/types/auth";
 
 const api = axios.create({
@@ -208,6 +211,47 @@ export async function fetchCompareGames(appIds: number[], days?: number) {
     params: { ids: appIds.join(","), days },
   });
   return data.data as GameDetail[];
+}
+
+export async function fetchCompareOverview(
+  appIds: number[],
+  days: number = 30,
+  platform: "combined" | "android" | "ios" = "combined",
+): Promise<CompareOverview> {
+  const { data } = await api.get<ApiResponse<CompareOverview>>("/games/compare-overview", {
+    params: { ids: appIds.join(","), days, platform },
+  });
+  return data.data;
+}
+
+export async function runCompareAI(
+  appIds: number[],
+  onProgress?: (p: AnalysisProgressUpdate) => void,
+): Promise<SavedGameComparison> {
+  if (onProgress) {
+    return postJsonStream<SavedGameComparison>("/analysis/compare", { appIds }, onProgress);
+  }
+  const { data } = await api.post<ApiResponse<SavedGameComparison>>("/analysis/compare", { appIds }, {
+    timeout: 300_000,
+  });
+  return data.data;
+}
+
+export async function fetchCompareHistory(
+  appIds: number[],
+  limit = 10,
+): Promise<SavedGameComparison[]> {
+  const { data } = await api.get<ApiResponse<SavedGameComparison[]>>("/analysis/compare/history", {
+    params: { ids: appIds.join(","), limit },
+  });
+  return data.data;
+}
+
+export async function fetchLatestCompare(appIds: number[]): Promise<SavedGameComparison | null> {
+  const { data } = await api.get<ApiResponse<SavedGameComparison | null>>("/analysis/compare/latest", {
+    params: { ids: appIds.join(",") },
+  });
+  return data.data;
 }
 
 export async function fetchPotentialScores(

@@ -24,6 +24,7 @@ const Login = lazy(() => import("./pages/Login"));
 const Waiting = lazy(() => import("./pages/Waiting"));
 const AdminUsers = lazy(() => import("./pages/AdminUsers"));
 const Distribution = lazy(() => import("./pages/Distribution"));
+const Compare = lazy(() => import("./pages/Compare"));
 
 function PageLoader() {
   return (
@@ -77,6 +78,7 @@ export default function App() {
                   <Route path="/" element={<Dashboard />} />
                   <Route path="/ranking" element={<Ranking />} />
                   <Route path="/game/:id" element={<GameDetail />} />
+                  <Route path="/compare" element={<Compare />} />
                   <Route path="/potential" element={<Potential />} />
                   <Route path="/distribution" element={<Distribution />} />
                   {/* More specific path first; parent Outlet renders nested child */}

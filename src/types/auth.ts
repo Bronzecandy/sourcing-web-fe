@@ -60,6 +60,7 @@ export interface AdminMeta {
 export const ROUTE_PERMISSION: Record<string, PermissionKey | null> = {
   "/": "crawl.dashboard",
   "/ranking": "crawl.ranking",
+  "/compare": "crawl.ranking",
   "/potential": "analytics.potential",
   "/distribution": "analytics.distribution",
   "/ai-analysis": "ai.read",
@@ -69,6 +70,7 @@ export const ROUTE_PERMISSION: Record<string, PermissionKey | null> = {
 export function permissionForPath(pathname: string): PermissionKey | null {
   if (pathname === "/" || pathname === "") return "crawl.dashboard";
   if (pathname.startsWith("/ranking")) return "crawl.ranking";
+  if (pathname.startsWith("/compare")) return "crawl.ranking";
   if (pathname.startsWith("/game/")) return "crawl.game";
   if (pathname.startsWith("/potential")) return "analytics.potential";
   if (pathname.startsWith("/distribution")) return "analytics.distribution";

@@ -1,4 +1,5 @@
 import type { AiAnalysis } from "@/types";
+import { CompareMissingAnalysisError } from "@/types";
 
 export type AnalysisProgressDetail = {
   collected?: number;
@@ -16,9 +17,15 @@ export type AnalysisProgressUpdate = {
   detail?: AnalysisProgressDetail;
 };
 
-type DoneLine =
-  | { type: "done"; success: true; data: AiAnalysis }
-  | { type: "done"; success: false; error: string };
+type DoneLine<T> =
+  | { type: "done"; success: true; data: T }
+  | {
+      type: "done";
+      success: false;
+      error: string;
+      code?: string;
+      missing?: Array<{ appId: number; gameName?: string }>;
+    };
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "/api";
 
@@ -46,11 +53,16 @@ async function readNdjsonStream<T>(
     for (const line of lines) {
       const trimmed = line.trim();
       if (!trimmed) continue;
-      const obj = JSON.parse(trimmed) as AnalysisProgressUpdate | DoneLine;
+      const obj = JSON.parse(trimmed) as AnalysisProgressUpdate | DoneLine<T>;
       if (obj.type === "progress") {
         onProgress(obj);
       } else if (obj.type === "done") {
-        if (!obj.success) throw new Error(obj.error || "Analysis failed");
+        if (!obj.success) {
+          if (obj.code === "MISSING_ANALYSIS" && obj.missing?.length) {
+            throw new CompareMissingAnalysisError(obj.error || "Missing AI analysis", obj.missing);
+          }
+          throw new Error(obj.error || "Request failed");
+        }
         return obj.data as T;
       }
     }
@@ -58,9 +70,14 @@ async function readNdjsonStream<T>(
 
   const tail = buffer.trim();
   if (tail) {
-    const obj = JSON.parse(tail) as DoneLine;
+    const obj = JSON.parse(tail) as DoneLine<T>;
     if (obj.type === "done") {
-      if (!obj.success) throw new Error(obj.error || "Analysis failed");
+      if (!obj.success) {
+        if (obj.code === "MISSING_ANALYSIS" && obj.missing?.length) {
+          throw new CompareMissingAnalysisError(obj.error || "Missing AI analysis", obj.missing);
+        }
+        throw new Error(obj.error || "Request failed");
+      }
       return obj.data as T;
     }
   }
@@ -76,6 +93,20 @@ async function readNdjsonStream<T>(
     }
     throw err;
   }
+}
+
+export async function postJsonStream<T>(
+  path: string,
+  body: unknown,
+  onProgress: (p: AnalysisProgressUpdate) => void,
+): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    credentials: "include",
+    body: JSON.stringify({ ...(body as object), stream: true }),
+  });
+  return readNdjsonStream<T>(res, onProgress);
 }
 
 export async function postAnalysisStream(

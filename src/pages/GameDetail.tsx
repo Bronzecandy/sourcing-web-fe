@@ -5,7 +5,8 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
 } from "recharts";
-import { ArrowLeft, Brain, Star, Users, Heart, MessageSquare, TrendingUp, Activity, Shield, Database, History, ChevronDown, ChevronUp, Trash2, Sparkles, Calendar, Download, LayoutGrid, Bookmark } from "lucide-react";
+import { ArrowLeft, Brain, Star, Users, Heart, MessageSquare, TrendingUp, Activity, Shield, Database, History, ChevronDown, ChevronUp, Trash2, Sparkles, Calendar, Download, LayoutGrid, Bookmark, GitCompare } from "lucide-react";
+import CompareGamePicker from "@/components/CompareGamePicker";
 import { fetchGameDetail, fetchGameReviews, triggerAnalysis, fetchGamePotentialBreakdown, fetchLatestAnalysis, fetchAnalysisHistory, deleteAnalysis } from "@/services/api";
 import { useContentLang } from "@/lib/content-language";
 import { getSummaryBullets, mainAnalysisScore } from "@/lib/analysis-localize";
@@ -25,6 +26,7 @@ import { LaunchBoardTags } from "@/components/LaunchBoardTags";
 import { analysisStoreLinks, gameStoreLinks } from "@/lib/store-links";
 import { DEFAULT_REVIEW_WINDOW, type ReviewWindow } from "@/types/review-window";
 import { buildFanReserveDeltaSeries, formatDelta } from "@/lib/chart-delta";
+import { momentumBreakdown } from "@/lib/momentum-score";
 import AnalysisConfirmWizard from "@/components/AnalysisConfirmWizard";
 import { useUiCopy, potentialRadarMetric } from "@/lib/use-ui-copy";
 import { cn, formatNumber, getScoreColor } from "@/lib/utils";
@@ -90,6 +92,7 @@ export default function GameDetail() {
 
   const [reviewWindow, setReviewWindow] = useState<ReviewWindow>(DEFAULT_REVIEW_WINDOW);
   const [wizardOpen, setWizardOpen] = useState(false);
+  const [comparePickerOpen, setComparePickerOpen] = useState(false);
   const [analysisProgress, setAnalysisProgress] =
     useState<AnalysisProgressState>(INITIAL_ANALYSIS_PROGRESS);
 
@@ -160,9 +163,25 @@ export default function GameDetail() {
 
   return (
     <div className="space-y-6">
-      <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
-        <ArrowLeft className="w-4 h-4" /> {t("Quay lại", "Back")}
-      </button>
+      <CompareGamePicker
+        open={comparePickerOpen}
+        onClose={() => setComparePickerOpen(false)}
+        seedGames={[{ appId: game.appId, title: game.title, iconUrl: game.iconUrl }]}
+        seedTags={game.tags}
+      />
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
+          <ArrowLeft className="w-4 h-4" /> {t("Quay lại", "Back")}
+        </button>
+        <button
+          type="button"
+          onClick={() => setComparePickerOpen(true)}
+          className="inline-flex items-center gap-2 rounded-lg border border-border px-3 py-1.5 text-sm font-medium hover:bg-muted transition-colors"
+        >
+          <GitCompare className="w-4 h-4" />
+          {t("So sánh", "Compare")}
+        </button>
+      </div>
 
       {/* Header */}
       <div className="bg-card rounded-xl border border-border p-6">
@@ -702,8 +721,8 @@ function PotentialBreakdownSection({
           <p className="text-muted-foreground text-xs mt-1">
             {lc.reserveWindowEnd
               ? t(
-                  `Chuyển giai đoạn từ ${lc.firstLaunchDate}. Reserve (v6): ${days} ngày trước ngày chuyển. Launch (v12): ${lc.postLaunchDayCount} ngày sau chuyển trong cửa sổ ${days} ngày gần nhất.`,
-                  `Phase change from ${lc.firstLaunchDate}. Reserve (v6): ${days} days before launch. Launch (v12): ${lc.postLaunchDayCount} post-launch days in the latest ${days}d window.`,
+                  `Chuyển giai đoạn từ ${lc.firstLaunchDate}. Reserve (v11): ${days} ngày trước ngày chuyển. Launch (v17): ${lc.postLaunchDayCount} ngày sau chuyển trong cửa sổ ${days} ngày gần nhất.`,
+                  `Phase change from ${lc.firstLaunchDate}. Reserve (v11): ${days} days before launch. Launch (v17): ${lc.postLaunchDayCount} post-launch days in the latest ${days}d window.`,
                 )
               : t(
                   `Chuyển giai đoạn từ ${lc.firstLaunchDate} — trong ${days} ngày: ${lc.preLaunchDayCount} ngày Reserve, ${lc.postLaunchDayCount} ngày Launch`,
@@ -715,7 +734,7 @@ function PotentialBreakdownSection({
 
       <PotentialSection
         variant="reserve"
-        title={t("Tiềm năng — Reserve (v6)", "Potential — Reserve (v6)")}
+        title={t("Tiềm năng — Reserve (v11)", "Potential — Reserve (v11)")}
         detail={breakdown?.reserve}
         lifecycle={lc}
         emptyHint={t(
@@ -726,7 +745,7 @@ function PotentialBreakdownSection({
 
       <PotentialSection
         variant="launched"
-        title={t("Tiềm năng — Launch (v12)", "Potential — Launch (v12)")}
+        title={t("Tiềm năng — Launch (v17)", "Potential — Launch (v17)")}
         detail={breakdown?.launched}
         emptyHint={t(
           "Chưa đủ dữ liệu Launch (cần ≥2–3 ngày sau khi lên bảng Hot/Pop/New).",
@@ -751,7 +770,9 @@ function PotentialSection({
   emptyHint: string;
 }) {
   const { t, lang } = useUiCopy();
+  const [boardView, setBoardView] = useState<"growth" | "stable">("growth");
   const isLaunch = variant === "launched";
+  const isGrowthView = boardView === "growth";
   const wAudience = isLaunch ? 0.45 : 0.65;
   const wRating = isLaunch ? 0.15 : 0.25;
   const wRank = isLaunch ? 0.2 : 0.1;
@@ -794,10 +815,74 @@ function PotentialSection({
   const boardL = potentialRadarMetric("LaunchBoard", lang);
   const preL = potentialRadarMetric("PreLaunch", lang);
   const fmtContrib = (score: number, w: number) => (score * w).toFixed(1);
+  const boardRank = isGrowthView ? detail?.potentialRankGrowth : detail?.potentialRankStable;
+  const boardScore = isGrowthView ? (detail?.momentumScore ?? 0) : (detail?.compositeScore ?? 0);
+  const momentum = useMemo(() => {
+    if (!aud || !rq || !isGrowthView) return null;
+    return momentumBreakdown(aud.growthBonus, rq.movementScore);
+  }, [aud, rq, isGrowthView]);
 
   return (
     <div className="bg-card rounded-xl border border-border p-5">
-      <h3 className="text-base font-semibold mb-4">{title}</h3>
+      <div className="flex flex-wrap items-start justify-between gap-3 mb-4">
+        <h3 className="text-base font-semibold">{title}</h3>
+        {detail && detail.potentialListSize != null && detail.potentialListSize > 0 && (
+          <div className="flex flex-wrap gap-2">
+            {detail.potentialRankGrowth != null && (
+              <span
+                className={cn(
+                  "text-xs font-semibold px-2.5 py-1 rounded-full",
+                  isGrowthView ? "bg-emerald-500/15 text-emerald-700 dark:text-emerald-300" : "bg-muted text-muted-foreground",
+                )}
+              >
+                {t("TT", "Growth")}: #{detail.potentialRankGrowth}/{detail.potentialListSize}
+              </span>
+            )}
+            {detail.potentialRankStable != null && (
+              <span
+                className={cn(
+                  "text-xs font-semibold px-2.5 py-1 rounded-full",
+                  !isGrowthView ? "bg-primary/15 text-primary" : "bg-muted text-muted-foreground",
+                )}
+              >
+                {t("Quy mô", "Scale")}: #{detail.potentialRankStable}/{detail.potentialListSize}
+              </span>
+            )}
+          </div>
+        )}
+      </div>
+
+      <div className="flex rounded-lg border border-border overflow-hidden w-fit mb-4">
+        {(["growth", "stable"] as const).map((v) => (
+          <button
+            key={v}
+            onClick={() => setBoardView(v)}
+            className={cn(
+              "px-4 py-2 text-sm font-medium transition-colors flex items-center gap-1.5",
+              boardView === v
+                ? "bg-primary text-primary-foreground"
+                : "bg-card text-muted-foreground hover:bg-muted",
+            )}
+          >
+            {v === "growth" ? <TrendingUp className="w-4 h-4" /> : <Bookmark className="w-4 h-4" />}
+            {v === "growth" ? t("Tăng trưởng", "Growth") : t("Quy mô", "Scale")}
+          </button>
+        ))}
+      </div>
+
+      {boardRank != null && detail?.potentialListSize != null && (
+        <p className="text-sm text-muted-foreground mb-4 -mt-2">
+          {isGrowthView
+            ? t(
+                `Hạng #${boardRank} trên bảng Tăng trưởng (${detail.potentialListSize} game)`,
+                `Rank #${boardRank} on Growth board (${detail.potentialListSize} games)`,
+              )
+            : t(
+                `Hạng #${boardRank} trên bảng Quy mô (${detail.potentialListSize} game)`,
+                `Rank #${boardRank} on Scale board (${detail.potentialListSize} games)`,
+              )}
+        </p>
+      )}
       {!isLaunch && lifecycle?.reserveWindowEnd && (
         <p className="text-xs text-muted-foreground mb-4 -mt-2">
           {t(
@@ -807,15 +892,20 @@ function PotentialSection({
         </p>
       )}
       <p className="text-xs text-muted-foreground mb-4 -mt-2">
-        {isLaunch
+        {isGrowthView
           ? t(
-              "3 trụ chính + BXH Launch + bonus Reserve. Quy mô & tăng trưởng gộp một mốc: base theo tier Phân phối, tăng chậm được dung hoà khi quy mô đã lớn.",
-              "3 main pillars + Launch charts + pre-launch bonus. Audience merges scale + growth: Distribution tier base, slow growth forgiven when already large.",
+              "Bảng Tăng trưởng: 75% tốc độ tăng tuyệt đối + 25% đà leo hạng — ưu tiên game nhỏ tăng nhanh.",
+              "Growth board: 75% absolute growth rate + 25% chart climb — favors fast-growing smaller games.",
             )
-          : t(
-              "3 trụ: Quy mô & tăng trưởng (gộp), Đánh giá, Chất lượng hạng. Rating giữ điểm cao khi ổn định ở mức tốt; game lớn không bị trừ nặng vì tăng chậm.",
-              "3 pillars: Audience (merged), Rating, Rank Quality. Rating stays high when stable at a good level; large games aren't heavily penalized for slow growth.",
-            )}
+          : isLaunch
+            ? t(
+                "Bảng Quy mô: điểm tổng hợp v17 — quy mô, BXH Launch và vị thế ổn định.",
+                "Scale board: composite v17 — scale, launch charts, and stable placement.",
+              )
+            : t(
+                "Bảng Quy mô: điểm tổng hợp v11 — quy mô audience, rating và chất lượng hạng.",
+                "Scale board: composite v11 — audience scale, rating, and rank quality.",
+              )}
       </p>
 
       {!detail ? (
@@ -835,52 +925,188 @@ function PotentialSection({
               </ResponsiveContainer>
             </div>
             <div className="md:col-span-4 space-y-3">
-              <div className="grid grid-cols-3 gap-3">
-                <ScoreCard label={t("Điểm cuối", "Final Score")} value={detail.compositeScore} large />
-                <ScoreCard label={t("Điểm thô", "Raw Score")} value={detail.rawComposite} />
+              <div className="grid gap-3 grid-cols-2">
+                <ScoreCard
+                  label={isGrowthView ? t("Điểm tăng trưởng", "Momentum score") : t("Điểm cuối", "Final Score")}
+                  value={boardScore}
+                  large
+                />
                 <div className="bg-muted/30 rounded-lg p-3">
-                  <p className="text-xs text-muted-foreground">{t("Độ tin cậy dữ liệu", "Data Confidence")}</p>
-                  <p className="text-lg font-bold">×{detail.confidence.multiplier}</p>
+                  <p className="text-xs text-muted-foreground">{t("Độ tin cậy dữ liệu", "Data confidence")}</p>
+                  <p className="text-lg font-bold">{detail.confidence.coverage}%</p>
                   <p className="text-xs text-muted-foreground">
-                    {detail.confidence.dataPoints}/{detail.confidence.analysisDays} {t("ngày", "days")} ({detail.confidence.coverage}%)
+                    {detail.confidence.dataPoints}/{detail.confidence.analysisDays} {t("ngày có dữ liệu", "days with data")}
                   </p>
                 </div>
               </div>
-              <div className="bg-muted/20 rounded-lg px-3 py-2 text-[10px] text-muted-foreground space-y-1">
-                <p>
-                  <span className="font-medium text-foreground">{t("Thô", "Raw")}</span>{" "}
-                  = {audienceL}×{wAudience} + {ratingL}×{wRating} + {rankL}×{wRank}
-                  {isLaunch ? ` + ${boardL}×${wBoard} + ${preL}×${wPre}` : ""}
-                </p>
-                <p>
-                  {t(
-                    "Trụ thiếu dữ liệu sẽ bị bỏ và chia lại trọng số cho các trụ còn lại (không tính 0).",
-                    "Pillars with no data are dropped and weights renormalized over the rest (not scored as 0).",
-                  )}
-                </p>
-                <p>
-                  <span className="font-medium text-foreground">{t("Cuối", "Final")}</span>{" "}
-                  = {t("Thô", "Raw")} × {t("hệ số tin cậy", "Confidence multiplier")} ({detail.rawComposite} × {detail.confidence.multiplier} = {detail.compositeScore})
-                </p>
-                {detail.floorApplied && (
-                  <p className="text-amber-700 dark:text-amber-400">
+              {isGrowthView && momentum ? (
+                <div className="bg-muted/20 rounded-lg px-3 py-2 text-[10px] text-muted-foreground space-y-1">
+                  <p>
+                    <span className="font-medium text-foreground">{t("Công thức", "Formula")}</span>{" "}
+                    = 75% × {t("chuẩn hóa tăng trưởng", "growth normalization")} + 25% × {t("đà leo hạng", "movement")}
+                    {" "}= {momentum.growthPart} + {momentum.movementPart} = {momentum.total}
+                  </p>
+                  <p>
                     {t(
-                      "Đã áp sàn: hạng BXH không được kéo điểm thô xuống dưới (Quy mô & Đánh giá) − 2 khi cả hai trụ đủ mạnh.",
-                      "Floor applied: chart rank cannot drag raw score below (Audience + Rating) core − 2 when both pillars are strong.",
+                      `Độ tin cậy ${detail.confidence.coverage}% — chỉ hiển thị, không nhân vào điểm.`,
+                      `Data confidence ${detail.confidence.coverage}% — informational only, not applied to score.`,
                     )}
                   </p>
-                )}
-                <p>
-                  {t(
-                    `Tin cậy = độ phủ dữ liệu (${detail.confidence.coverage}%), hệ số ×0.3 đến ×1.0. Càng nhiều ngày dữ liệu thì tin cậy càng cao.`,
-                    `Confidence = data coverage (${detail.confidence.coverage}%), range ×0.3 to ×1.0. More days of data = higher confidence.`,
+                  <p>
+                    {t("Điểm Quy mô (composite)", "Scale score (composite)")}: {detail.compositeScore.toFixed(1)} — {t("xem tab Quy mô", "see Scale tab")}
+                  </p>
+                </div>
+              ) : !isGrowthView ? (
+                <div className="bg-muted/20 rounded-lg px-3 py-2 text-[10px] text-muted-foreground space-y-1">
+                  <p>
+                    <span className="font-medium text-foreground">{t("Điểm", "Score")}</span>{" "}
+                    = {audienceL}×{wAudience} + {ratingL}×{wRating} + {rankL}×{wRank}
+                    {isLaunch ? ` + ${boardL}×${wBoard} + ${preL}×${wPre}` : ""}
+                    {" "}= {detail.compositeScore}
+                  </p>
+                  <p>
+                    {t(
+                      "Trụ thiếu dữ liệu sẽ bị bỏ và chia lại trọng số cho các trụ còn lại (không tính 0).",
+                      "Pillars with no data are dropped and weights renormalized over the rest (not scored as 0).",
+                    )}
+                  </p>
+                  {detail.floorApplied && (
+                    <p className="text-amber-700 dark:text-amber-400">
+                      {t(
+                        "Đã áp sàn: hạng BXH không được kéo điểm xuống dưới (Quy mô & Đánh giá) − 2 khi cả hai trụ đủ mạnh.",
+                        "Floor applied: chart rank cannot drag score below (Audience + Rating) core − 2 when both pillars are strong.",
+                      )}
+                    </p>
                   )}
-                </p>
-              </div>
+                  <p>
+                    {t(
+                      `Độ tin cậy dữ liệu ${detail.confidence.coverage}% (${detail.confidence.dataPoints}/${detail.confidence.analysisDays} ngày) — chỉ hiển thị, không nhân vào điểm.`,
+                      `Data confidence ${detail.confidence.coverage}% (${detail.confidence.dataPoints}/${detail.confidence.analysisDays} days) — informational only, not applied to score.`,
+                    )}
+                  </p>
+                  {detail.momentumScore != null && (
+                    <p>
+                      {t("Điểm tăng trưởng", "Momentum score")}: {detail.momentumScore.toFixed(1)} — {t("xem tab Tăng trưởng", "see Growth tab")}
+                    </p>
+                  )}
+                </div>
+              ) : null}
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid gap-4 md:grid-cols-2">
+            {isGrowthView && aud && rq && momentum ? (
+              <>
+                <FactorCard
+                  icon={<TrendingUp className="w-4 h-4" />}
+                  label={t("Tăng trưởng tuyệt đối", "Absolute growth")}
+                  weight="75%"
+                  score={momentum.growthNorm}
+                  description={t(
+                    `Tốc độ tăng ${scaleMetricLabel(aud.metric)} trong cửa sổ. Bonus tier cộng vào điểm nền 50 rồi chuẩn hóa 0–100 — không giảm trọng số vì base lớn như bảng Quy mô.`,
+                    `${scaleMetricLabel(aud.metric)} growth in the window. Tier bonus adds to base 50 then normalizes 0–100 — not down-weighted for large base unlike the Scale board.`,
+                  )}
+                  rows={[
+                    {
+                      label: t("Delta đầu kỳ → hiện tại", "Start → end delta"),
+                      value:
+                        aud.start != null && aud.end != null ? (
+                          <span className="block text-right">
+                            <span className="block">
+                              {formatNumber(aud.start)} → {formatNumber(aud.end)}
+                            </span>
+                            <span className="block text-[10px] mt-0.5">
+                              {detail.audienceGrowthAbsolute != null ? formatDelta(detail.audienceGrowthAbsolute) : formatDelta(aud.delta)}
+                              {detail.audienceGrowthRate != null && (
+                                <span className="text-muted-foreground">
+                                  {" "}
+                                  ({detail.audienceGrowthRate > 0 ? "+" : ""}
+                                  {detail.audienceGrowthRate}%)
+                                </span>
+                              )}
+                            </span>
+                          </span>
+                        ) : (
+                          t("Chưa đủ dữ liệu", "Not enough data")
+                        ),
+                    },
+                    {
+                      label: t("Bonus tier Phân phối", "Distribution tier bonus"),
+                      badge: aud.growthTierLabel ?? undefined,
+                      value: t("Theo delta tuyệt đối trong kỳ", "From absolute delta in window"),
+                      points: aud.growthBonus,
+                      pointsTone: "bonus",
+                      help: t(
+                        "Điểm cộng theo mốc tăng trưởng Phân phối — có thể âm nếu giảm.",
+                        "Additive points from Distribution growth buckets — may be negative if declining.",
+                      ),
+                    },
+                    {
+                      label: t("Chuẩn hóa", "Normalization"),
+                      badge: "0–100",
+                      value: t("50 + bonus tier, giới hạn 0–100", "50 + tier bonus, clamped 0–100"),
+                      points: momentum.growthNorm,
+                      help: t(
+                        "Điểm trụ trước khi nhân trọng số 75%.",
+                        "Pillar score before applying the 75% weight.",
+                      ),
+                      formula: `50 ${aud.growthBonus >= 0 ? "+" : ""}${aud.growthBonus} = ${momentum.growthNorm}`,
+                    },
+                    {
+                      label: t("Tổng", "Total"),
+                      isTotal: true,
+                      value: t(
+                        `Đóng góp Potential: ×75% = ${momentum.growthPart}`,
+                        `Potential contribution: ×75% = ${momentum.growthPart}`,
+                      ),
+                      points: momentum.growthPart,
+                      formula: `${momentum.growthNorm} × 0.75 = ${momentum.growthPart}`,
+                    },
+                  ]}
+                />
+                <FactorCard
+                  icon={<Activity className="w-4 h-4" />}
+                  label={t("Đà leo hạng", "Chart climb")}
+                  weight="25%"
+                  score={rq.movementScore}
+                  description={t(
+                    "Leo hạng BXH trong kỳ — thưởng game bùng nổ leo top, không phạt game đã giữ đỉnh ổn định.",
+                    "Chart rank climb in the window — rewards breakouts, doesn't penalize games holding a stable peak.",
+                  )}
+                  rows={[
+                    {
+                      label: t("Hạng đầu → cuối", "Rank start → end"),
+                      value: `#${rq.rankStart} → #${rq.rankEnd} (${rq.change >= 0 ? "+" : ""}${rq.change})`,
+                      points: rq.movementScore,
+                      help: t(
+                        "Điểm đà 0–100 trước khi nhân trọng số 25%.",
+                        "Movement score 0–100 before applying the 25% weight.",
+                      ),
+                    },
+                    {
+                      label: t("Hạng tốt nhất", "Best rank"),
+                      badge: "min",
+                      value: `#${rq.bestRank}`,
+                    },
+                    {
+                      label: t("Tổng", "Total"),
+                      isTotal: true,
+                      value: t(
+                        `Đóng góp Potential: ×25% = ${momentum.movementPart}`,
+                        `Potential contribution: ×25% = ${momentum.movementPart}`,
+                      ),
+                      points: momentum.movementPart,
+                      formula: `${rq.movementScore.toFixed(1)} × 0.25 = ${momentum.movementPart}`,
+                      help: t(
+                        `Cộng với tăng trưởng (${momentum.growthPart}) → ${momentum.total} điểm`,
+                        `Plus growth (${momentum.growthPart}) → ${momentum.total} total`,
+                      ),
+                    },
+                  ]}
+                />
+              </>
+            ) : isGrowthView ? null : (
+              <>
             {aud && (
               <FactorCard
                 icon={<Database className="w-4 h-4" />}
@@ -1080,9 +1306,11 @@ function PotentialSection({
                 ]}
               />
             )}
+              </>
+            )}
           </div>
 
-          {isLaunch && (
+          {isLaunch && !isGrowthView && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {lb && (
                 <FactorCard

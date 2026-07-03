@@ -103,6 +103,9 @@ export interface PotentialScore {
   fansCount: number | null;
   trend: "up" | "down" | "stable";
   segment?: PotentialSegment;
+  audienceGrowthAbsolute?: number | null;
+  audienceGrowthRate?: number | null;
+  momentumScore?: number;
   launchCategory?: LaunchCategory;
   releaseDate?: string | null;
   primaryLaunchBoard?: "pop" | "hot" | "new" | null;
@@ -573,6 +576,12 @@ export interface GamePotentialDetail {
     activeBoardCount: number;
     activeBoards: Array<{ board: "pop" | "hot" | "new"; rank: number | null }>;
   };
+  audienceGrowthAbsolute?: number | null;
+  audienceGrowthRate?: number | null;
+  momentumScore?: number;
+  potentialRankGrowth?: number | null;
+  potentialRankStable?: number | null;
+  potentialListSize?: number;
 }
 
 export interface PotentialLifecycleMeta {
@@ -609,4 +618,78 @@ export interface LibraryPendingItem {
   gameName: string;
   createdAt: string;
   status: "pending" | "merged";
+}
+
+export interface CompareAnalysisSummary {
+  available: boolean;
+  analyzedAt?: string;
+  weightedScore?: number | null;
+  band5?: number | null;
+  decision?: string | null;
+  partRollups?: Array<{
+    partId: string;
+    labelVi: string;
+    weightInTotal: number;
+    partAverageScore: number | null;
+  }>;
+  redFlagAtAGlance?: AiAnalysis["redFlagAtAGlance"] | null;
+}
+
+export interface CompareGameEntry {
+  appId: number;
+  detail: GameDetail;
+  potential: PotentialBreakdown;
+  analysisSummary: CompareAnalysisSummary;
+}
+
+export interface CompareOverview {
+  appIds: number[];
+  days: number;
+  platform: "combined" | "android" | "ios";
+  games: CompareGameEntry[];
+}
+
+export interface ComparePartGameVerdict {
+  score: number | null;
+  verdict: string;
+}
+
+export interface ComparePartResult {
+  partId: string;
+  labelVi: string;
+  byGame: Record<number, ComparePartGameVerdict>;
+  winnerAppId: number | null;
+  note: string;
+}
+
+export interface GameComparisonAI {
+  summaryBullets: string[];
+  perPart: ComparePartResult[];
+  strengthsByGame: Record<number, string[]>;
+  weaknessesByGame: Record<number, string[]>;
+  overallRecommendation: string;
+  bestForTestAppId: number | null;
+  genrePackNote?: string | null;
+}
+
+export interface SavedGameComparison {
+  compareId: string;
+  appIds: number[];
+  comparedAt: string;
+  comparison: GameComparisonAI;
+}
+
+export class CompareMissingAnalysisError extends Error {
+  code: "MISSING_ANALYSIS";
+  missing: Array<{ appId: number; gameName?: string }>;
+
+  constructor(
+    message: string,
+    missing: Array<{ appId: number; gameName?: string }>,
+  ) {
+    super(message);
+    this.name = "CompareMissingAnalysisError";
+    this.code = "MISSING_ANALYSIS";
+    this.missing = missing;
+  }
 }

@@ -12,10 +12,23 @@ import { LaunchBoardTags } from "@/components/LaunchBoardTags";
 import StoreLinkChips from "@/components/StoreLinkChips";
 import { gameStoreLinks } from "@/lib/store-links";
 import { cn, getScoreColor, getTrendIcon, formatNumber } from "@/lib/utils";
+import { formatDelta } from "@/lib/chart-delta";
 import { useUiCopy, potentialRadarMetric } from "@/lib/use-ui-copy";
 
 type ReserveSortKey = "growth" | "growthRate";
 type SortDir = "asc" | "desc";
+type TableVariant = "growth" | "stable";
+type BoardView = "reserve-growth" | "reserve-stable" | "launched-growth" | "launched-stable";
+
+const BOARD_OPTIONS: BoardView[] = ["reserve-growth", "reserve-stable", "launched-growth", "launched-stable"];
+
+function boardSegment(view: BoardView): PotentialSegment {
+  return view.startsWith("reserve") ? "reserve" : "launched";
+}
+
+function boardVariant(view: BoardView): TableVariant {
+  return view.endsWith("growth") ? "growth" : "stable";
+}
 
 export default function Potential() {
   const navigate = useNavigate();
@@ -23,18 +36,18 @@ export default function Potential() {
   const [days, setDays] = useState(14);
   const [platform, setPlatform] = useState<"combined" | "android" | "ios">("combined");
   const [selectedAppId, setSelectedAppId] = useState<number | null>(null);
-  const [selectedSegment, setSelectedSegment] = useState<PotentialSegment>("reserve");
+  const [boardView, setBoardView] = useState<BoardView>("reserve-growth");
+  const selectedSegment = boardSegment(boardView);
+  const tableView = boardVariant(boardView);
 
   const { data: reserveScores, isLoading: loadingReserve } = useQuery({
     queryKey: ["potential", "reserve", days, platform],
     queryFn: () => fetchPotentialScores(days, platform, "reserve"),
-    enabled: selectedSegment === "reserve",
   });
 
   const { data: launchedScores, isLoading: loadingLaunched } = useQuery({
     queryKey: ["potential", "launched", days, platform],
     queryFn: () => fetchPotentialScores(days, platform, "launched"),
-    enabled: selectedSegment === "launched",
   });
 
   const { data: breakoutsReserve } = useQuery({
@@ -90,16 +103,61 @@ export default function Potential() {
 
   const tableLoading = selectedSegment === "reserve" ? loadingReserve : loadingLaunched;
   const tableScores = activeScores;
-  const tableSubtitle =
+
+  const growthScores = useMemo(() => {
+    if (!tableScores?.length) return [];
+    return [...tableScores].sort((a, b) => {
+      const ma = a.momentumScore ?? a.audienceGrowthAbsolute ?? -Infinity;
+      const mb = b.momentumScore ?? b.audienceGrowthAbsolute ?? -Infinity;
+      return mb - ma;
+    });
+  }, [tableScores]);
+
+  const stableScores = useMemo(() => {
+    if (!tableScores?.length) return [];
+    return [...tableScores].sort((a, b) => b.compositeScore - a.compositeScore);
+  }, [tableScores]);
+
+  const growthSubtitle =
     selectedSegment === "reserve"
       ? t(
-          "Game đặt chỗ — công thức v9 (Quy mô & tăng trưởng · Đánh giá · Chất lượng hạng)",
-          "Reserve games — algo v9 (Audience · Rating · Rank Quality)",
+          "Xếp theo tăng đăng ký trước tuyệt đối + đà leo hạng — game nhỏ tăng nhanh nổi lên",
+          "Ranked by absolute pre-reg growth + chart climb — surfaces fast-growing smaller games",
         )
       : t(
-          "Công thức v15 — chỉ tính sau ngày lên bảng Hot/Pop/New",
-          "Algo v15 — scores only from post-launch chart days",
+          "Xếp theo tăng download tuyệt đối + đà leo hạng",
+          "Ranked by absolute download growth + chart climb",
         );
+
+  const stableSubtitle =
+    selectedSegment === "reserve"
+      ? t(
+          "Xếp theo điểm tổng hợp v11 — ưu tiên quy mô & base lớn ổn định",
+          "Composite algo v11 — favors large stable audience base",
+        )
+      : t(
+          "Xếp theo điểm tổng hợp v17 — base lớn & vị thế BXH ổn định",
+          "Composite algo v17 — large base & stable chart position",
+        );
+
+  const activeTableScores = tableView === "growth" ? growthScores : stableScores;
+  const tableTitle =
+    tableView === "growth"
+      ? selectedSegment === "reserve"
+        ? t("Tiềm năng — Reserve (Tăng trưởng)", "Potential — Reserve (Growth)")
+        : t("Tiềm năng — Launch (Tăng trưởng)", "Potential — Launch (Growth)")
+      : selectedSegment === "reserve"
+        ? t("Tiềm năng — Reserve (Quy mô)", "Potential — Reserve (Scale)")
+        : t("Tiềm năng — Launch (Quy mô)", "Potential — Launch (Scale)");
+  const tableSubtitle = tableView === "growth" ? growthSubtitle : stableSubtitle;
+  const tableIcon =
+    tableView === "growth" ? (
+      <TrendingUp className="w-5 h-5 text-emerald-500" />
+    ) : selectedSegment === "reserve" ? (
+      <Bookmark className="w-5 h-5 text-primary" />
+    ) : (
+      <Rocket className="w-5 h-5 text-violet-500" />
+    );
 
   return (
     <div className="space-y-6">
@@ -113,26 +171,30 @@ export default function Potential() {
         </p>
       </div>
 
-      <div className="flex flex-wrap gap-3">
-        <div className="flex rounded-lg border border-border overflow-hidden">
-          {(["reserve", "launched"] as const).map((s) => (
-            <button
-              key={s}
-              onClick={() => {
-                setSelectedSegment(s);
-                setSelectedAppId(null);
-              }}
-              className={cn(
-                "px-4 py-2 text-sm font-medium transition-colors flex items-center gap-1.5",
-                selectedSegment === s
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-card text-muted-foreground hover:bg-muted",
-              )}
-            >
-              {s === "reserve" ? <Bookmark className="w-4 h-4" /> : <Rocket className="w-4 h-4" />}
-              {s === "reserve" ? "Reserve" : "Launch"}
-            </button>
-          ))}
+      <div className="flex flex-wrap gap-3 items-center">
+        <div className="flex rounded-lg border border-border overflow-hidden flex-wrap">
+          {BOARD_OPTIONS.map((key) => {
+            const seg = boardSegment(key);
+            const variant = boardVariant(key);
+            const active = boardView === key;
+            return (
+              <button
+                key={key}
+                onClick={() => {
+                  setBoardView(key);
+                  setSelectedAppId(null);
+                }}
+                className={cn(
+                  "px-3 py-2 text-sm font-medium transition-colors flex items-center gap-1.5 whitespace-nowrap border-r border-border last:border-r-0",
+                  active ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:bg-muted",
+                )}
+              >
+                {seg === "reserve" ? <Bookmark className="w-4 h-4 shrink-0" /> : <Rocket className="w-4 h-4 shrink-0" />}
+                {seg === "reserve" ? "Reserve" : "Launch"}
+                <span className="opacity-80">({variant === "growth" ? t("Tăng trưởng", "Growth") : t("Quy mô", "Scale")})</span>
+              </button>
+            );
+          })}
         </div>
         <div className="flex rounded-lg border border-border overflow-hidden">
           {(["combined", "android", "ios"] as const).map((p) => (
@@ -164,212 +226,204 @@ export default function Potential() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="lg:col-span-2">
-          <PotentialRankingTable
-            title={
-              selectedSegment === "reserve"
-                ? t("Tiềm năng — game đặt chỗ (Reserve)", "Potential — reservation (Reserve)")
-                : t("Tiềm năng — game đã ra mắt", "Potential — launched games")
-            }
-            subtitle={tableSubtitle}
-            icon={
-              selectedSegment === "reserve" ? (
-                <Bookmark className="w-5 h-5 text-primary" />
-              ) : (
-                <Rocket className="w-5 h-5 text-violet-500" />
-              )
-            }
-            scores={tableScores}
-            isLoading={tableLoading}
-            platform={platform}
-            segment={selectedSegment}
-            selectedAppId={selectedAppId}
-            onSelect={pickRow}
-            onOpenGame={(id) => navigate(`/game/${id}`)}
-            t={t}
-          />
-        </div>
+      <div className="space-y-4">
+        <p className="text-xs text-muted-foreground">{tableSubtitle}</p>
 
-        <div className="space-y-6">
-          {selected && (
-            <div className="bg-card rounded-xl border border-border p-5">
-              <div className="flex items-center gap-2 mb-4">
-                {selected.iconUrl && (
-                  <img src={selected.iconUrl} alt="" className="w-8 h-8 rounded-lg" referrerPolicy="no-referrer" />
-                )}
-                <div className="min-w-0">
-                  <h3 className="font-semibold text-sm truncate">{selected.title}</h3>
-                  <p className="text-[10px] text-muted-foreground">
-                    {selectedSegment === "reserve"
-                      ? t("Đặt chỗ", "Reservation")
-                      : selected.launchCategory === "new_launch"
-                        ? t("Mới ra mắt", "New launch")
-                        : t("Đã ra mắt lâu", "Established")}
-                  </p>
-                </div>
-              </div>
-              <ResponsiveContainer width="100%" height={250}>
-                <RadarChart data={radarData}>
-                  <PolarGrid stroke="#e2e8f0" />
-                  <PolarAngleAxis dataKey="metric" tick={{ fontSize: 12 }} />
-                  <PolarRadiusAxis angle={90} domain={[0, 100]} tick={{ fontSize: 10 }} />
-                  <Radar dataKey="value" stroke="#6366f1" fill="#6366f1" fillOpacity={0.3} />
-                  <Tooltip />
-                </RadarChart>
-              </ResponsiveContainer>
-              <div className="text-center mt-2">
-                <span className="text-xs text-muted-foreground">{t("Fan:", "Fans: ")}</span>
-                <span className="text-xs font-medium">
-                  {selected.fansCount != null ? formatNumber(selected.fansCount) : t("Không có", "N/A")}
-                </span>
+        <PotentialRankingTable
+          variant={tableView}
+          title={tableTitle}
+          subtitle={tableSubtitle}
+          icon={tableIcon}
+          scores={activeTableScores}
+          isLoading={tableLoading}
+          platform={platform}
+          segment={selectedSegment}
+          selectedAppId={selectedAppId}
+          onSelect={pickRow}
+          onOpenGame={(id) => navigate(`/game/${id}`)}
+          t={t}
+        />
+
+        {selected && (
+          <div className="bg-card rounded-xl border border-border p-5">
+            <div className="flex items-center gap-2 mb-4">
+              {selected.iconUrl && (
+                <img src={selected.iconUrl} alt="" className="w-8 h-8 rounded-lg" referrerPolicy="no-referrer" />
+              )}
+              <div className="min-w-0">
+                <h3 className="font-semibold text-sm truncate">{selected.title}</h3>
+                <p className="text-[10px] text-muted-foreground">
+                  {selectedSegment === "reserve"
+                    ? t("Đặt chỗ", "Reservation")
+                    : selected.launchCategory === "new_launch"
+                      ? t("Mới ra mắt", "New launch")
+                      : t("Đã ra mắt lâu", "Established")}
+                </p>
               </div>
             </div>
-          )}
-
-          <div className="bg-card rounded-xl border border-border p-5">
-            <h3 className="font-semibold flex items-center gap-2 mb-4">
-              <Zap className="w-5 h-5 text-yellow-500" />
-              {selectedSegment === "reserve"
-                ? t(`Bùng nổ Reserve (${days} ngày)`, `Reserve breakouts (${days}d)`)
-                : t(`Bùng nổ đã ra mắt (${days} ngày)`, `Launched breakouts (${days}d)`)}
-            </h3>
-            {breakouts && breakouts.length > 0 ? (
-              <div className="space-y-3">
-                {breakouts.slice(0, 10).map((g) => (
-                  <div
-                    key={g.appId}
-                    className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 hover:bg-muted/50 cursor-pointer transition-colors"
-                    onClick={() => navigate(`/game/${g.appId}`)}
-                  >
-                    {g.iconUrl ? (
-                      <img src={g.iconUrl} alt="" className="w-9 h-9 rounded-lg shrink-0" referrerPolicy="no-referrer" />
-                    ) : (
-                      <div className="w-9 h-9 rounded-lg bg-primary/20 flex items-center justify-center text-xs font-bold text-primary shrink-0">
-                        {g.title.charAt(0)}
-                      </div>
-                    )}
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{g.title}</p>
-                      <p className="text-xs text-muted-foreground">
-                        #{g.startRank} → #{g.currentRank}
-                      </p>
-                      <StoreLinkChips links={gameStoreLinks(g.appId)} size="xs" className="mt-1" />
-                    </div>
-                    <div className="flex items-center gap-1 text-up text-sm font-bold shrink-0">
-                      <ArrowUp className="w-3 h-3" /> +{g.improvement}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-muted-foreground text-sm text-center py-4">
-                {t("Chưa phát hiện game bùng nổ", "No breakout games detected")}
-              </p>
-            )}
+            <ResponsiveContainer width="100%" height={220}>
+              <RadarChart data={radarData}>
+                <PolarGrid stroke="#e2e8f0" />
+                <PolarAngleAxis dataKey="metric" tick={{ fontSize: 12 }} />
+                <PolarRadiusAxis angle={90} domain={[0, 100]} tick={{ fontSize: 10 }} />
+                <Radar dataKey="value" stroke="#6366f1" fill="#6366f1" fillOpacity={0.3} />
+                <Tooltip />
+              </RadarChart>
+            </ResponsiveContainer>
+            <div className="text-center mt-2">
+              <span className="text-xs text-muted-foreground">{t("Fan:", "Fans: ")}</span>
+              <span className="text-xs font-medium">
+                {selected.fansCount != null ? formatNumber(selected.fansCount) : t("Không có", "N/A")}
+              </span>
+            </div>
           </div>
-        </div>
+        )}
       </div>
 
-      <div className="bg-card rounded-xl border border-border overflow-hidden">
-        <div className="px-5 py-4 border-b border-border">
-          <h2 className="font-semibold flex items-center gap-2">
-            <Bookmark className="w-5 h-5 text-primary" />
-            {t(`Tăng đăng ký trước mạnh nhất (${days} ngày)`, `Top Reserve Growth (${days}d)`)}
-          </h2>
-          <p className="text-xs text-muted-foreground mt-1">
-            {t("Game tăng số lượng đăng ký trước nhiều nhất", "Games with the highest increase in pre-registrations")}
-          </p>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="bg-card rounded-xl border border-border p-5">
+          <h3 className="font-semibold flex items-center gap-2 mb-4">
+            <Zap className="w-5 h-5 text-yellow-500" />
+            {selectedSegment === "reserve"
+              ? t(`Bùng nổ Reserve (${days} ngày)`, `Reserve breakouts (${days}d)`)
+              : t(`Bùng nổ Launch (${days} ngày)`, `Launch breakouts (${days}d)`)}
+          </h3>
+          {breakouts && breakouts.length > 0 ? (
+            <div className="space-y-3 max-h-[480px] overflow-y-auto">
+              {breakouts.slice(0, 10).map((g) => (
+                <div
+                  key={g.appId}
+                  className="flex items-center gap-3 p-3 rounded-lg bg-muted/30 hover:bg-muted/50 cursor-pointer transition-colors"
+                  onClick={() => navigate(`/game/${g.appId}`)}
+                >
+                  {g.iconUrl ? (
+                    <img src={g.iconUrl} alt="" className="w-9 h-9 rounded-lg shrink-0" referrerPolicy="no-referrer" />
+                  ) : (
+                    <div className="w-9 h-9 rounded-lg bg-primary/20 flex items-center justify-center text-xs font-bold text-primary shrink-0">
+                      {g.title.charAt(0)}
+                    </div>
+                  )}
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{g.title}</p>
+                    <p className="text-xs text-muted-foreground">
+                      #{g.startRank} → #{g.currentRank}
+                    </p>
+                    <StoreLinkChips links={gameStoreLinks(g.appId)} size="xs" className="mt-1" />
+                  </div>
+                  <div className="flex items-center gap-1 text-up text-sm font-bold shrink-0">
+                    <ArrowUp className="w-3 h-3" /> +{g.improvement}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="text-muted-foreground text-sm text-center py-4">
+              {t("Chưa phát hiện game bùng nổ", "No breakout games detected")}
+            </p>
+          )}
         </div>
-        {reserveGrowth && reserveGrowth.length > 0 ? (
-          <div className="overflow-x-auto max-h-[480px] overflow-y-auto">
-            <table className="w-full">
-              <thead className="bg-muted/50 sticky top-0">
-                <tr>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">#</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">{t("Game", "Game")}</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">{t("Hạng", "Rank")}</th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase">{t("Đầu kỳ", "Start")}</th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase">{t("Hiện tại", "Current")}</th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase">
-                    <button
-                      className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
-                      onClick={() => toggleReserveSort("growth")}
-                    >
-                      {t("Tăng tuyệt đối", "Growth")}{" "}
-                      <SortIcon active={reserveSort.key === "growth"} dir={reserveSort.dir} />
-                    </button>
-                  </th>
-                  <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase">
-                    <button
-                      className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
-                      onClick={() => toggleReserveSort("growthRate")}
-                    >
-                      {t("Tỷ lệ %", "Rate")}{" "}
-                      <SortIcon active={reserveSort.key === "growthRate"} dir={reserveSort.dir} />
-                    </button>
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {sortedReserveGrowth.map((g, idx) => (
-                  <tr
-                    key={g.appId}
-                    className="hover:bg-muted/30 cursor-pointer transition-colors"
-                    onClick={() => navigate(`/game/${g.appId}`)}
-                  >
-                    <td className="px-4 py-3 text-sm font-medium">{idx + 1}</td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        {g.iconUrl ? (
-                          <img src={g.iconUrl} alt="" className="w-7 h-7 rounded-lg" referrerPolicy="no-referrer" />
-                        ) : (
-                          <div className="w-7 h-7 rounded-lg bg-primary/20 flex items-center justify-center text-xs font-bold text-primary">
-                            {g.title.charAt(0)}
-                          </div>
-                        )}
-                        <div className="min-w-0">
-                          <span className="text-sm font-medium max-w-[160px] truncate block">{g.title}</span>
-                          <StoreLinkChips links={gameStoreLinks(g.appId)} size="xs" className="mt-0.5" />
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-sm text-muted-foreground">#{g.currentRank ?? t("Không có", "N/A")}</td>
-                    <td className="px-4 py-3 text-sm text-right text-muted-foreground">{formatNumber(g.startReserve)}</td>
-                    <td className="px-4 py-3 text-sm text-right font-medium">{formatNumber(g.currentReserve)}</td>
-                    <td className="px-4 py-3 text-right">
-                      <span className="text-sm font-bold text-up">+{formatNumber(g.growth)}</span>
-                    </td>
-                    <td className="px-4 py-3 text-right">
-                      <span
-                        className={cn(
-                          "text-xs font-semibold px-2 py-0.5 rounded-full",
-                          g.growthRate >= 50
-                            ? "bg-up/15 text-up"
-                            : g.growthRate >= 10
-                              ? "bg-stable/15 text-stable"
-                              : "bg-muted text-muted-foreground",
-                        )}
-                      >
-                        +{g.growthRate}%
-                      </span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+
+        <div className="bg-card rounded-xl border border-border overflow-hidden">
+          <div className="px-5 py-4 border-b border-border">
+            <h2 className="font-semibold flex items-center gap-2">
+              <Bookmark className="w-5 h-5 text-primary" />
+              {t(`Tăng đăng ký trước tuyệt đối (${days} ngày)`, `Absolute pre-reg growth (${days}d)`)}
+            </h2>
+            <p className="text-xs text-muted-foreground mt-1">
+              {t("Game tăng số lượng đăng ký trước nhiều nhất", "Games with the highest increase in pre-registrations")}
+            </p>
           </div>
-        ) : (
-          <p className="text-muted-foreground text-sm text-center py-8">
-            {t("Chưa có dữ liệu tăng đăng ký trước", "No reserve growth data available")}
-          </p>
-        )}
+          {reserveGrowth && reserveGrowth.length > 0 ? (
+            <div className="overflow-x-auto max-h-[480px] overflow-y-auto">
+              <table className="w-full">
+                <thead className="bg-muted/50 sticky top-0">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">#</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">{t("Game", "Game")}</th>
+                    <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground uppercase">{t("Hạng", "Rank")}</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase">{t("Đầu kỳ", "Start")}</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase">{t("Hiện tại", "Current")}</th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase">
+                      <button
+                        className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
+                        onClick={() => toggleReserveSort("growth")}
+                      >
+                        {t("Tăng tuyệt đối", "Growth")}{" "}
+                        <SortIcon active={reserveSort.key === "growth"} dir={reserveSort.dir} />
+                      </button>
+                    </th>
+                    <th className="px-4 py-3 text-right text-xs font-medium text-muted-foreground uppercase">
+                      <button
+                        className="inline-flex items-center gap-1 hover:text-foreground transition-colors"
+                        onClick={() => toggleReserveSort("growthRate")}
+                      >
+                        {t("Tỷ lệ %", "Rate")}{" "}
+                        <SortIcon active={reserveSort.key === "growthRate"} dir={reserveSort.dir} />
+                      </button>
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {sortedReserveGrowth.map((g, idx) => (
+                    <tr
+                      key={g.appId}
+                      className="hover:bg-muted/30 cursor-pointer transition-colors"
+                      onClick={() => navigate(`/game/${g.appId}`)}
+                    >
+                      <td className="px-4 py-3 text-sm font-medium">{idx + 1}</td>
+                      <td className="px-4 py-3">
+                        <div className="flex items-center gap-2">
+                          {g.iconUrl ? (
+                            <img src={g.iconUrl} alt="" className="w-7 h-7 rounded-lg" referrerPolicy="no-referrer" />
+                          ) : (
+                            <div className="w-7 h-7 rounded-lg bg-primary/20 flex items-center justify-center text-xs font-bold text-primary">
+                              {g.title.charAt(0)}
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <span className="text-sm font-medium max-w-[160px] truncate block">{g.title}</span>
+                            <StoreLinkChips links={gameStoreLinks(g.appId)} size="xs" className="mt-0.5" />
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-muted-foreground">#{g.currentRank ?? t("Không có", "N/A")}</td>
+                      <td className="px-4 py-3 text-sm text-right text-muted-foreground">{formatNumber(g.startReserve)}</td>
+                      <td className="px-4 py-3 text-sm text-right font-medium">{formatNumber(g.currentReserve)}</td>
+                      <td className="px-4 py-3 text-right">
+                        <span className="text-sm font-bold text-up">+{formatNumber(g.growth)}</span>
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <span
+                          className={cn(
+                            "text-xs font-semibold px-2 py-0.5 rounded-full",
+                            g.growthRate >= 50
+                              ? "bg-up/15 text-up"
+                              : g.growthRate >= 10
+                                ? "bg-stable/15 text-stable"
+                                : "bg-muted text-muted-foreground",
+                          )}
+                        >
+                          +{g.growthRate}%
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="text-muted-foreground text-sm text-center py-8">
+              {t("Chưa có dữ liệu tăng đăng ký trước", "No reserve growth data available")}
+            </p>
+          )}
+        </div>
       </div>
     </div>
   );
 }
 
 function PotentialRankingTable({
+  variant,
   title,
   subtitle,
   icon,
@@ -382,6 +436,7 @@ function PotentialRankingTable({
   onOpenGame,
   t,
 }: {
+  variant: TableVariant;
   title: string;
   subtitle: string;
   icon: ReactNode;
@@ -394,6 +449,12 @@ function PotentialRankingTable({
   onOpenGame: (appId: number) => void;
   t: (vi: string, en: string) => string;
 }) {
+  const isGrowth = variant === "growth";
+  const growthLabel =
+    segment === "reserve"
+      ? t("Tăng đăng ký", "Pre-reg growth")
+      : t("Tăng download", "Download growth");
+
   return (
     <div className="bg-card rounded-xl border border-border overflow-hidden">
       <div className="px-5 py-4 border-b border-border">
@@ -438,10 +499,17 @@ function PotentialRankingTable({
                   </>
                 )}
                 <th className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase">{t("Quy mô & TT", "Audience")}</th>
+                {isGrowth && (
+                  <th className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase whitespace-nowrap">
+                    {growthLabel}
+                  </th>
+                )}
                 <th className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase">{t("Đánh giá", "Rating")}</th>
                 <th className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase">{t("Chất lượng hạng", "Rank")}</th>
                 <th className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase">{t("Tin cậy", "Conf.")}</th>
-                <th className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase">{t("Điểm", "Score")}</th>
+                <th className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+                  {isGrowth ? t("Điểm TT", "Momentum") : t("Điểm", "Score")}
+                </th>
                 <th className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase">{t("Xu hướng", "Trend")}</th>
               </tr>
             </thead>
@@ -498,6 +566,34 @@ function PotentialRankingTable({
                   <td className="px-3 py-3">
                     <ScoreBar value={s.audienceScore ?? s.scaleScore ?? 0} />
                   </td>
+                  {isGrowth && (
+                    <td className="px-3 py-3 text-sm whitespace-nowrap">
+                      {s.audienceGrowthAbsolute != null ? (
+                        <div className="flex flex-col gap-0.5">
+                          <span
+                            className={cn(
+                              "font-semibold tabular-nums",
+                              s.audienceGrowthAbsolute > 0
+                                ? "text-up"
+                                : s.audienceGrowthAbsolute < 0
+                                  ? "text-down"
+                                  : "text-muted-foreground",
+                            )}
+                          >
+                            {formatDelta(s.audienceGrowthAbsolute)}
+                          </span>
+                          {s.audienceGrowthRate != null && (
+                            <span className="text-[10px] text-muted-foreground tabular-nums">
+                              {s.audienceGrowthRate > 0 ? "+" : ""}
+                              {s.audienceGrowthRate}%
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground">—</span>
+                      )}
+                    </td>
+                  )}
                   <td className="px-3 py-3">
                     <ScoreBar value={s.ratingScore} />
                   </td>
@@ -508,9 +604,20 @@ function PotentialRankingTable({
                     <ConfidenceBadge value={s.dataConfidence} />
                   </td>
                   <td className="px-3 py-3">
-                    <span className={cn("text-sm font-bold", getScoreColor(s.compositeScore))}>
-                      {(s.compositeScore ?? 0).toFixed(1)}
-                    </span>
+                    {isGrowth ? (
+                      <span
+                        className={cn(
+                          "text-sm font-bold tabular-nums",
+                          getScoreColor(s.momentumScore ?? 0),
+                        )}
+                      >
+                        {(s.momentumScore ?? 0).toFixed(1)}
+                      </span>
+                    ) : (
+                      <span className={cn("text-sm font-bold", getScoreColor(s.compositeScore))}>
+                        {(s.compositeScore ?? 0).toFixed(1)}
+                      </span>
+                    )}
                   </td>
                   <td className="px-3 py-3">
                     <span
