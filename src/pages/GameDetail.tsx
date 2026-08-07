@@ -837,8 +837,8 @@ function PotentialSection({
   const anchorHelp =
     growthAnchors != null
       ? t(
-          `Phổ tăng/ngày (hiệu chỉnh 7+14+30 ngày): p50 ${formatNumber(growthAnchors.p50)}/ngày · p75 ${formatNumber(growthAnchors.p75)} · p90 ${formatNumber(growthAnchors.p90)} · p95 ${formatNumber(growthAnchors.p95)}`,
-          `Per-day growth spectrum (7+14+30d calibration): p50 ${formatNumber(growthAnchors.p50)}/d · p75 ${formatNumber(growthAnchors.p75)} · p90 ${formatNumber(growthAnchors.p90)} · p95 ${formatNumber(growthAnchors.p95)}`,
+          `Phổ tăng/ngày (toàn lịch sử): p50 ${formatNumber(growthAnchors.p50)}/ngày · p75 ${formatNumber(growthAnchors.p75)} · p90 ${formatNumber(growthAnchors.p90)} · p95 ${formatNumber(growthAnchors.p95)}`,
+          `Per-day growth spectrum (all-time history): p50 ${formatNumber(growthAnchors.p50)}/d · p75 ${formatNumber(growthAnchors.p75)} · p90 ${formatNumber(growthAnchors.p90)} · p95 ${formatNumber(growthAnchors.p95)}`,
         )
       : undefined;
 
@@ -919,12 +919,12 @@ function PotentialSection({
             )
           : isLaunch
             ? t(
-                "Bảng Quy mô: điểm tổng hợp v18 — quy mô, BXH Launch và vị thế ổn định.",
-                "Scale board: composite v18 — scale, launch charts, and stable placement.",
+                "Bảng Quy mô: điểm tổng hợp v19 — quy mô, BXH Launch và vị thế ổn định.",
+                "Scale board: composite v19 — scale, launch charts, and stable placement.",
               )
             : t(
-                "Bảng Quy mô: điểm tổng hợp v12 — quy mô audience, rating và chất lượng hạng.",
-                "Scale board: composite v12 — audience scale, rating, and rank quality.",
+                "Bảng Quy mô: điểm tổng hợp v13 — quy mô audience, rating và chất lượng hạng.",
+                "Scale board: composite v13 — audience scale, rating, and rank quality.",
               )}
       </p>
 
@@ -1022,8 +1022,8 @@ function PotentialSection({
                 weight="60%"
                 score={momentum.growthNorm}
                 description={t(
-                  `Chuẩn hóa tăng ${scaleMetricLabel(aud.metric)}: (1) xếp hạng percentile delta tuyệt đối trong ${detail.momentumGrowthCohortSize ?? "—"} game cùng bảng cùng kỳ; (2) trần theo tốc độ tăng/ngày so phân phối lịch sử gộp 7+14+30 ngày — lấy min(2) để game chỉ tăng nhẹ không được điểm cao dù ít đối thủ tăng.`,
-                  `${scaleMetricLabel(aud.metric)} normalization: (1) percentile rank of absolute delta vs ${detail.momentumGrowthCohortSize ?? "—"} same-board peers; (2) cap from per-day growth vs 7+14+30d historical distribution — final = min(both) so mild growth cannot score high when few peers grew.`,
+                  `Chuẩn hóa tăng ${scaleMetricLabel(aud.metric)}: (1) xếp hạng percentile delta tuyệt đối trong ${detail.momentumGrowthCohortSize ?? "—"} game cùng bảng cùng kỳ; (2) trần theo tốc độ tăng/ngày so với phân phối toàn lịch sử (mọi kỳ 7/14/30 ngày từ trước tới giờ) — lấy min để game chỉ tăng nhẹ không được điểm cao dù ít đối thủ cùng kỳ tăng.`,
+                  `${scaleMetricLabel(aud.metric)} normalization: (1) percentile of absolute delta vs ${detail.momentumGrowthCohortSize ?? "—"} same-board peers this window; (2) cap from per-day growth vs all-time historical distribution (sliding 7/14/30d windows) — final = min(both) so mild growth cannot score high when few peers grew.`,
                 )}
                 rows={[
                   {
@@ -1076,15 +1076,15 @@ function PotentialSection({
                   },
                   {
                     label: t("Trần tuyệt đối/ngày", "Absolute per-day cap"),
-                    badge: "7+14+30d",
+                    badge: t("Toàn sử", "All-time"),
                     value:
                       growthPerDay != null
                         ? `${formatNumber(Math.round(growthPerDay))}/${t("ngày", "day")}`
                         : t("—", "—"),
                     points: detail.momentumGrowthAbsCap,
                     help: anchorHelp ?? t(
-                      "Percentile của tốc độ tăng/ngày so mẫu lịch sử 7+14+30 ngày — ghìm game tăng nhẹ.",
-                      "Percentile of per-day growth vs 7+14+30-day historical sample — caps mild growers.",
+                      "Percentile của tốc độ tăng/ngày so với phổ toàn lịch sử (từ trước tới giờ) — ghìm game tăng nhẹ.",
+                      "Percentile of per-day growth vs all-time historical spectrum — caps mild growers.",
                     ),
                   },
                   {

@@ -132,12 +132,12 @@ export default function Potential() {
   const stableSubtitle =
     selectedSegment === "reserve"
       ? t(
-          "Xếp theo điểm tổng hợp v12 — ưu tiên quy mô & base lớn ổn định",
-          "Composite algo v12 — favors large stable audience base",
+          "Xếp theo điểm tổng hợp v13 — ưu tiên quy mô & base lớn ổn định",
+          "Composite algo v13 — favors large stable audience base",
         )
       : t(
-          "Xếp theo điểm tổng hợp v18 — base lớn & vị thế BXH ổn định",
-          "Composite algo v18 — large base & stable chart position",
+          "Xếp theo điểm tổng hợp v19 — base lớn & vị thế BXH ổn định",
+          "Composite algo v19 — large base & stable chart position",
         );
 
   const activeTableScores = tableView === "growth" ? growthScores : stableScores;
