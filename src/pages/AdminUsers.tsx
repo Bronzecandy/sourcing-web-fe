@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Shield, Search } from "lucide-react";
-import { fetchAdminMeta, fetchAdminUsers, patchAdminUser } from "@/services/api";
+import { fetchAdminMeta, fetchAdminUsers, patchAdminUser, createAdminUser } from "@/services/api";
 import type { AdminUserRow } from "@/types/auth";
 import { roleHasAllPermissions } from "@/lib/user-roles";
 import { useUiCopy } from "@/lib/use-ui-copy";
@@ -12,6 +12,8 @@ import { useToast } from "@/components/ui/Toast";
 import PendingApprovalQueue from "@/components/admin/PendingApprovalQueue";
 import UsersTable from "@/components/admin/UsersTable";
 import UserEditDrawer, { draftFromUser, type UserDraft } from "@/components/admin/UserEditDrawer";
+import InviteUserCard, { type InviteUserPayload } from "@/components/admin/InviteUserCard";
+import axios from "axios";
 
 export default function AdminUsersPage() {
   const { t } = useUiCopy();
@@ -38,6 +40,13 @@ export default function AdminUsersPage() {
   const saveMutation = useMutation({
     mutationFn: ({ id, body }: { id: string; body: Parameters<typeof patchAdminUser>[1] }) =>
       patchAdminUser(id, body),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-users"] });
+    },
+  });
+
+  const inviteMutation = useMutation({
+    mutationFn: (body: InviteUserPayload) => createAdminUser(body),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["admin-users"] });
     },
@@ -113,6 +122,28 @@ export default function AdminUsersPage() {
 
   const assignable = meta?.assignableRoles ?? [];
 
+  function apiErr(e: unknown, fallback: string): string {
+    if (axios.isAxiosError(e)) {
+      const msg = (e.response?.data as { error?: string } | undefined)?.error;
+      if (msg) return msg;
+    }
+    return e instanceof Error ? e.message : fallback;
+  }
+
+  async function handleInvite(payload: InviteUserPayload) {
+    try {
+      await inviteMutation.mutateAsync(payload);
+      toast.success(
+        t(
+          "Đã thêm người dùng. Họ login Google bằng đúng email này là vào được.",
+          "User added. They can enter after signing in with this Google email.",
+        ),
+      );
+    } catch (e) {
+      toast.error(apiErr(e, t("Thêm thất bại", "Failed to add user")));
+    }
+  }
+
   return (
     <div className="space-y-6 w-full min-h-[calc(100vh-8rem)]">
       <PageHeader
@@ -157,6 +188,12 @@ export default function AdminUsersPage() {
         onApprove={quickApprove}
         onConfigure={(u) => openDrawer(u, true)}
         approvingId={approvingId}
+      />
+
+      <InviteUserCard
+        assignableRoles={assignable}
+        submitting={inviteMutation.isPending}
+        onSubmit={handleInvite}
       />
 
       <div className="relative w-full max-w-xl">

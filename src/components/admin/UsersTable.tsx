@@ -79,6 +79,11 @@ export default function UsersTable({ users, onManage, search }: UsersTableProps)
                       <div className="min-w-0">
                         <p className="font-medium truncate">{u.name || "—"}</p>
                         <p className="text-xs text-muted-foreground truncate">{u.email}</p>
+                        {u.googleLinked === false && (
+                          <p className="text-xs text-sky-700 dark:text-sky-300 mt-0.5">
+                            {t("Chưa login Google", "Not signed in with Google yet")}
+                          </p>
+                        )}
                       </div>
                     </div>
                   </td>

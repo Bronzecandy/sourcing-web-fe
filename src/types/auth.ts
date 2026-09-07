@@ -46,8 +46,27 @@ export interface AuthUser {
   permissions: PermissionMap;
 }
 
+export function emptyPermissions(): PermissionMap {
+  return {
+    "crawl.dashboard": false,
+    "crawl.ranking": false,
+    "crawl.game": false,
+    "crawl.reviews": false,
+    "analytics.potential": false,
+    "analytics.distribution": false,
+    "ai.read": false,
+    "ai.run": false,
+    "ai.delete": false,
+    "libraries.read": false,
+    "libraries.write": false,
+    "translate.use": false,
+  };
+}
+
 export interface AdminUserRow extends AuthUser {
   createdAt: string;
+  /** False until the person signs in with Google (pre-invited by email). */
+  googleLinked: boolean;
 }
 
 export interface AdminMeta {

@@ -56,6 +56,17 @@ export async function fetchAdminMeta(): Promise<AdminMeta> {
   return data.data;
 }
 
+export async function createAdminUser(body: {
+  email: string;
+  name?: string | null;
+  status?: "PENDING" | "ACTIVE";
+  role?: UserRole;
+  permissions?: Partial<Record<PermissionKey, boolean>>;
+}): Promise<AdminUserRow> {
+  const { data } = await api.post<ApiResponse<AdminUserRow>>("/admin/users", body);
+  return data.data;
+}
+
 export async function patchAdminUser(
   id: string,
   body: {
