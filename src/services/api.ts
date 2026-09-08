@@ -33,7 +33,7 @@ import type { AdminMeta, AdminUserRow, AuthUser, PermissionKey, UserRole } from 
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || "/api",
-  timeout: 30000,
+  timeout: 60_000,
   withCredentials: true,
 });
 
@@ -272,6 +272,7 @@ export async function fetchPotentialScores(
 ): Promise<PotentialScore[]> {
   const { data } = await api.get<ApiResponse<PotentialScore[]>>("/ranking/potential", {
     params: { days, platform, segment },
+    timeout: 90_000,
   });
   return data.data;
 }
@@ -284,6 +285,7 @@ export async function fetchBreakoutGames(
 ): Promise<BreakoutGame[]> {
   const { data } = await api.get<ApiResponse<BreakoutGame[]>>("/ranking/breakout", {
     params: { days, threshold, platform, segment },
+    timeout: 90_000,
   });
   return data.data;
 }
@@ -307,6 +309,7 @@ export async function fetchGamePotentialBreakdown(
 ): Promise<PotentialBreakdown> {
   const { data } = await api.get<ApiResponse<PotentialBreakdown>>(`/ranking/potential/${appId}/breakdown`, {
     params: { days, platform },
+    timeout: 90_000,
   });
   return data.data;
 }
@@ -317,6 +320,7 @@ export async function fetchReserveGrowth(
 ): Promise<ReserveGrowthGame[]> {
   const { data } = await api.get<ApiResponse<ReserveGrowthGame[]>>("/ranking/reserve-growth", {
     params: { days, platform },
+    timeout: 90_000,
   });
   return data.data;
 }

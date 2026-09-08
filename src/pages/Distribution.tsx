@@ -73,7 +73,7 @@ export default function Distribution() {
 
   const [year, setYear] = useState<number | null | "pending">(() => {
     const y = searchParams.get("year");
-    if (y == null) return "pending";
+    if (y == null) return new Date().getFullYear();
     if (y === "all") return null;
     const n = Number(y);
     return Number.isFinite(n) ? n : "pending";
@@ -90,10 +90,15 @@ export default function Distribution() {
   });
 
   useEffect(() => {
-    if (meta?.years.length && year === "pending") {
+    if (!meta?.years.length) return;
+    if (year === "pending") {
+      setYear(meta.years[0]!);
+      return;
+    }
+    if (typeof year === "number" && !meta.years.includes(year) && searchParams.get("year") == null) {
       setYear(meta.years[0]!);
     }
-  }, [meta, year]);
+  }, [meta, year, searchParams]);
 
   const resolvedYear = year === "pending" ? null : year;
 
@@ -136,7 +141,7 @@ export default function Distribution() {
         month: month ?? undefined,
         lifecycle: tab,
       }),
-    enabled: year !== "pending" && showTrend && !!data,
+    enabled: year !== "pending" && showTrend,
     retry: false,
     staleTime: 3_600_000,
   });
@@ -158,7 +163,7 @@ export default function Distribution() {
 
   const activeTab = TAB_CONFIG.find((x) => x.id === tab)!;
 
-  if (!meta || year === "pending") {
+  if (year === "pending") {
     return (
       <div className="flex items-center justify-center h-96">
         <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary" />
@@ -198,13 +203,13 @@ export default function Distribution() {
               } else {
                 const y = Number(v);
                 setYear(y);
-                const ms = meta.months[y];
+                const ms = meta?.months[y];
                 setMonth(ms?.length ? null : null);
               }
             }}
           >
             <option value="all">{t("Tất cả", "All years")}</option>
-            {meta.years.map((y) => (
+            {(meta?.years ?? (resolvedYear != null ? [resolvedYear] : [])).map((y) => (
               <option key={y} value={y}>
                 {y}
               </option>
@@ -270,8 +275,8 @@ export default function Distribution() {
           </p>
           <p className="text-muted-foreground text-xs">
             {t(
-              "Lần đầu tải cả năm có thể mất 1–2 phút. Nếu BE đang warmup cache, thử SKIP_WARMUP=1 trong .env.",
-              "Full-year first load may take 1–2 minutes. If BE is warming cache, try SKIP_WARMUP=1 in .env.",
+              "Lần đầu (chưa có cache) có thể mất khoảng 1 phút. Các lần sau lấy từ cache máy chủ.",
+              "First load without cache may take about a minute. Later loads use server cache.",
             )}
           </p>
           <button

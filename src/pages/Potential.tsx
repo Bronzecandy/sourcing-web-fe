@@ -43,26 +43,31 @@ export default function Potential() {
   const { data: reserveScores, isLoading: loadingReserve } = useQuery({
     queryKey: ["potential", "reserve", days, platform],
     queryFn: () => fetchPotentialScores(days, platform, "reserve"),
+    enabled: selectedSegment === "reserve",
   });
 
   const { data: launchedScores, isLoading: loadingLaunched } = useQuery({
     queryKey: ["potential", "launched", days, platform],
     queryFn: () => fetchPotentialScores(days, platform, "launched"),
+    enabled: selectedSegment === "launched",
   });
 
   const { data: breakoutsReserve } = useQuery({
     queryKey: ["breakout", "reserve", days, platform],
     queryFn: () => fetchBreakoutGames(days, 10, platform, "reserve"),
+    enabled: selectedSegment === "reserve",
   });
 
   const { data: breakoutsLaunched } = useQuery({
     queryKey: ["breakout", "launched", days, platform],
     queryFn: () => fetchBreakoutGames(days, 10, platform, "launched"),
+    enabled: selectedSegment === "launched",
   });
 
   const { data: reserveGrowth } = useQuery({
     queryKey: ["reserve-growth", days, platform],
     queryFn: () => fetchReserveGrowth(days, platform),
+    enabled: selectedSegment === "reserve",
   });
 
   const [reserveSort, setReserveSort] = useState<{ key: ReserveSortKey; dir: SortDir }>({ key: "growth", dir: "desc" });
