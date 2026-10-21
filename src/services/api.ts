@@ -24,6 +24,7 @@ import type {
   CompareOverview,
   GameComparisonAI,
   SavedGameComparison,
+  RadarRecapLatest,
 } from "../types";
 import type { ReviewWindow } from "@/types/review-window";
 import type { HistoryRange } from "@/types/history-range";
@@ -540,6 +541,26 @@ export async function appendLibraryStudio(input: {
 }
 
 /** Append one row to a library document (immediate persist, no full PUT). */
+export async function fetchRadarLatest(): Promise<RadarRecapLatest | null> {
+  const { data } = await api.get<{ success: boolean; data?: RadarRecapLatest | null; error?: string }>("/radar/latest");
+  if (!data.success) throw new Error(data.error || "Không tải được Radar");
+  return data.data ?? null;
+}
+
+export async function downloadRadarFile(date: string, kind: "docx" | "xlsx"): Promise<void> {
+  const res = await api.get(`/radar/${date}/${kind}`, { responseType: "blob" });
+  const blob = new Blob([res.data]);
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const fallback = kind === "docx" ? `Executive Summary - Radar.docx` : `Game Radar Recap.xlsx`;
+  const header = String(res.headers["content-disposition"] ?? "");
+  const match = header.match(/filename="([^"]+)"/);
+  a.href = url;
+  a.download = match?.[1] || fallback;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 export async function postLibraryEntry(fileId: string, body: Record<string, unknown>): Promise<void> {
   const { data } = await api.post<{ success: boolean; error?: string }>(
     `/libraries/${encodeURIComponent(fileId)}/entries`,

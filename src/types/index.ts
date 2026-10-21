@@ -691,6 +691,35 @@ export interface SavedGameComparison {
   comparison: GameComparisonAI;
 }
 
+export interface RadarRecapSummary {
+  periodCode: string;
+  dateLabel: string;
+  copyText: string;
+  executiveParagraphs: string[];
+  testableNow: string[];
+  upcoming: string[];
+  monitorNoDateCount: number;
+  counts: Array<{ label: string; counts: Record<string, number> }>;
+}
+
+export interface RadarRecapLatest {
+  date: string;
+  periodCode: string;
+  status: string;
+  summary: RadarRecapSummary | null;
+  rows: Array<{
+    board: string;
+    rank: number;
+    appId: number;
+    title: string;
+    titleEn: string;
+    score: number;
+    nextAction: string;
+    insights: string;
+    overviewUrl: string;
+  }>;
+}
+
 export class CompareMissingAnalysisError extends Error {
   code: "MISSING_ANALYSIS";
   missing: Array<{ appId: number; gameName?: string }>;

@@ -4,6 +4,7 @@ import {
   Trophy,
   TrendingUp,
   BarChart3,
+  Radar,
   Brain,
   Library,
   Shield,
@@ -38,6 +39,12 @@ const NAV_ITEMS: Array<{
     to: "/potential",
     icon: TrendingUp,
     label: "Potential Analysis",
+    permissions: ["analytics.potential"],
+  },
+  {
+    to: "/radar",
+    icon: Radar,
+    label: "Game Radar",
     permissions: ["analytics.potential"],
   },
   {
