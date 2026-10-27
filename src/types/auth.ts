@@ -21,6 +21,10 @@ export type UserStatus = "PENDING" | "ACTIVE";
 export const USER_ROLES = ["SUPER_ADMIN", "ADMIN", "STAFF", "USER", "TESTER"] as const;
 export type UserRole = (typeof USER_ROLES)[number];
 
+/** Role cho web Sourcing — mỗi user tối đa 1, có thể kèm TESTER. */
+export const SOURCING_ROLES = ["SUPER_ADMIN", "ADMIN", "STAFF", "USER"] as const;
+export type SourcingRole = (typeof SOURCING_ROLES)[number];
+
 export interface PermissionMap {
   "crawl.dashboard": boolean;
   "crawl.ranking": boolean;
@@ -43,8 +47,11 @@ export interface AuthUser {
   name: string | null;
   avatarUrl: string | null;
   status: UserStatus;
+  /** Role cao nhất trong `roles`; TESTER nghĩa là chỉ là tester (không có role Sourcing). */
   role: UserRole;
+  roles: UserRole[];
   isPanelAdmin: boolean;
+  isTester: boolean;
   permissions: PermissionMap;
 }
 

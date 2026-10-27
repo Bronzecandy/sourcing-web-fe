@@ -1,32 +1,25 @@
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { hasPermission } from "@/lib/permissions";
 
 function Spinner() {
   return (
-    <div className="brand-hero flex min-h-screen items-center justify-center">
+    <div className="brand-hero flex min-h-[70dvh] items-center justify-center pt-16">
       <div className="h-8 w-8 animate-spin rounded-full border-b-2 border-white" />
     </div>
   );
 }
 
+/** Trang cần đăng nhập: chưa đăng nhập thì về landing (hiện nhắc đăng nhập). */
 export function TesterAuthRoute() {
   const { user, loading } = useAuth();
   const location = useLocation();
   if (loading) return <Spinner />;
-  if (!user) return <Navigate to="/tester/login" replace state={{ from: location.pathname }} />;
+  if (!user) return <Navigate to="/tester" replace state={{ needLogin: true, from: location.pathname }} />;
   return <Outlet />;
 }
 
-export function TesterPublicRoute() {
-  const { user, loading } = useAuth();
-  if (loading) return <Spinner />;
-  if (user) return <Navigate to="/tester" replace />;
-  return <Outlet />;
-}
-
-export function TesterAdminRoute() {
-  const { user } = useAuth();
-  if (!hasPermission(user, "tester.manage")) return <Navigate to="/tester" replace />;
-  return <Outlet />;
+/** Link cũ /tester/login (vd ?error=domain) → landing, giữ query. */
+export function TesterLoginRedirect() {
+  const { search } = useLocation();
+  return <Navigate to={`/tester${search}`} replace />;
 }

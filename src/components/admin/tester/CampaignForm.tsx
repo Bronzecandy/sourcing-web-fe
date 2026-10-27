@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
-import { testerApi } from "../../api";
-import type { TestCampaign } from "../../types";
+import { testerApi } from "@/tester/api";
+import type { TestCampaign } from "@/tester/types";
 
 export type CampaignDraft = {
   gameName: string;
@@ -18,6 +18,13 @@ export type CampaignDraft = {
   status: TestCampaign["status"];
   result: string;
   resultNote: string;
+};
+
+export const CAMPAIGN_STATUS: Record<string, string> = {
+  planned: "Lên plan",
+  running: "Đang test",
+  done: "Đã test xong",
+  cancelled: "Hủy",
 };
 
 export function draftFrom(c?: TestCampaign | null): CampaignDraft {
@@ -56,7 +63,7 @@ export function draftPayload(d: CampaignDraft): Partial<TestCampaign> & Record<s
   } as Partial<TestCampaign> & Record<string, unknown>;
 }
 
-const input = "w-full rounded-lg border border-border px-3 py-2 text-sm";
+const input = "w-full px-3 py-2 rounded-lg border border-border bg-background text-sm";
 
 export default function CampaignForm({ value, onChange }: { value: CampaignDraft; onChange: (next: CampaignDraft) => void }) {
   const meta = useQuery({ queryKey: ["tester-admin-meta"], queryFn: testerApi.adminMeta });
@@ -100,7 +107,7 @@ export default function CampaignForm({ value, onChange }: { value: CampaignDraft
           <option value="">Không giới hạn</option>
           {(meta.data?.platforms ?? []).map((p) => (
             <option key={p.key} value={p.key}>
-              {p.key} — {p.label}
+              {p.key} · {p.label}
             </option>
           ))}
         </select>
@@ -134,10 +141,11 @@ export default function CampaignForm({ value, onChange }: { value: CampaignDraft
       <label className="space-y-1 text-sm">
         <span className="font-medium">Trạng thái</span>
         <select className={input} value={value.status} onChange={(e) => set("status", e.target.value as CampaignDraft["status"])}>
-          <option value="planned">Lên plan</option>
-          <option value="running">Đang test</option>
-          <option value="done">Đã test xong</option>
-          <option value="cancelled">Hủy</option>
+          {Object.entries(CAMPAIGN_STATUS).map(([k, v]) => (
+            <option key={k} value={k}>
+              {v}
+            </option>
+          ))}
         </select>
       </label>
       <label className="space-y-1 text-sm">
@@ -181,8 +189,10 @@ function TagPicker({
           type="button"
           onClick={() => onToggle(g.key)}
           className={cn(
-            "rounded-full border px-3 py-1 text-xs font-medium",
-            selected.includes(g.key) ? "border-brand-violet bg-brand-violet text-white" : "border-border bg-white hover:bg-muted",
+            "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+            selected.includes(g.key)
+              ? "border-primary bg-primary text-primary-foreground"
+              : "border-border bg-background hover:bg-muted",
           )}
         >
           {g.label}

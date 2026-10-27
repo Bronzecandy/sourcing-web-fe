@@ -2,7 +2,7 @@ import { useState, type FormEvent } from "react";
 import { UserPlus, Loader2, ChevronDown, ChevronRight } from "lucide-react";
 import type { PermissionKey, UserRole } from "@/types/auth";
 import { emptyPermissions } from "@/types/auth";
-import { roleHasAllPermissions } from "@/lib/user-roles";
+import { primaryRoleOf, roleHasAllPermissions, sourcingRoleOf } from "@/lib/user-roles";
 import { useUiCopy } from "@/lib/use-ui-copy";
 import { cn } from "@/lib/utils";
 import { btnPrimary } from "@/lib/button-classes";
@@ -13,9 +13,13 @@ export type InviteUserPayload = {
   email: string;
   name?: string | null;
   status: "PENDING" | "ACTIVE";
-  role: UserRole;
+  roles: UserRole[];
   permissions?: Partial<Record<PermissionKey, boolean>>;
 };
+
+function grantsPermissions(roles: UserRole[]): boolean {
+  return sourcingRoleOf(roles) !== null && !roleHasAllPermissions(primaryRoleOf(roles));
+}
 
 type InviteUserCardProps = {
   assignableRoles: UserRole[];
@@ -25,13 +29,11 @@ type InviteUserCardProps = {
 
 export default function InviteUserCard({ assignableRoles, submitting, onSubmit }: InviteUserCardProps) {
   const { t } = useUiCopy();
-  const defaultRole: UserRole = assignableRoles.includes("USER")
-    ? "USER"
-    : (assignableRoles[0] ?? "USER");
+  const defaultRoles: UserRole[] = ["USER"];
   const [open, setOpen] = useState(false);
   const [email, setEmail] = useState("");
   const [name, setName] = useState("");
-  const [role, setRole] = useState<UserRole>(defaultRole);
+  const [roles, setRoles] = useState<UserRole[]>(defaultRoles);
   const [activeNow, setActiveNow] = useState(true);
   const [permissions, setPermissions] = useState(emptyPermissions());
   const [permsOpen, setPermsOpen] = useState(true);
@@ -44,13 +46,13 @@ export default function InviteUserCard({ assignableRoles, submitting, onSubmit }
       email: trimmed,
       name: name.trim() || null,
       status: activeNow ? "ACTIVE" : "PENDING",
-      role,
+      roles,
     };
-    if (!roleHasAllPermissions(role)) body.permissions = permissions;
+    if (grantsPermissions(roles)) body.permissions = permissions;
     await onSubmit(body);
     setEmail("");
     setName("");
-    setRole(defaultRole);
+    setRoles(defaultRoles);
     setActiveNow(true);
     setPermissions(emptyPermissions());
   }
@@ -99,7 +101,7 @@ export default function InviteUserCard({ assignableRoles, submitting, onSubmit }
             </label>
           </div>
 
-          <RoleSelector value={role} onChange={setRole} assignableRoles={assignableRoles} />
+          <RoleSelector value={roles} onChange={setRoles} assignableRoles={assignableRoles} />
 
           <label className="flex items-center gap-2 text-sm">
             <input
@@ -110,7 +112,7 @@ export default function InviteUserCard({ assignableRoles, submitting, onSubmit }
             {t("Duyệt ngay (ACTIVE) — vào app sau khi login Google", "Approve now (ACTIVE) — they enter the app after Google login")}
           </label>
 
-          {!roleHasAllPermissions(role) && (
+          {grantsPermissions(roles) && (
             <div className="space-y-2">
               <button
                 type="button"

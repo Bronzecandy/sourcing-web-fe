@@ -5,20 +5,42 @@ import UserAvatar from "@/components/UserAvatar";
 import { useAuth } from "@/contexts/AuthContext";
 import { useUiCopy } from "@/lib/use-ui-copy";
 import { cn } from "@/lib/utils";
-import { Crown, Shield, Users, Pencil, Eye } from "lucide-react";
+import { Crown, Shield, Users, Pencil, Eye, Gamepad2 } from "lucide-react";
 import { btnSubtle, btnGhost } from "@/lib/button-classes";
 
 function roleBadgeClass(role: UserRole): string {
   if (role === "SUPER_ADMIN") return "bg-amber-500/15 text-amber-700 dark:text-amber-300";
   if (role === "ADMIN") return "bg-primary/15 text-primary";
   if (role === "STAFF") return "bg-violet-500/15 text-violet-700 dark:text-violet-300";
+  if (role === "TESTER") return "bg-fuchsia-500/15 text-fuchsia-700 dark:text-fuchsia-300";
   return "bg-muted text-muted-foreground";
 }
 
 function RoleIcon({ role }: { role: UserRole }) {
   if (role === "SUPER_ADMIN") return <Crown className="w-3.5 h-3.5" />;
   if (role === "ADMIN") return <Shield className="w-3.5 h-3.5" />;
+  if (role === "TESTER") return <Gamepad2 className="w-3.5 h-3.5" />;
   return <Users className="w-3.5 h-3.5" />;
+}
+
+export function RoleChips({ roles }: { roles: UserRole[] }) {
+  const { lang } = useUiCopy();
+  return (
+    <div className="flex flex-wrap gap-1">
+      {roles.map((role) => (
+        <span
+          key={role}
+          className={cn(
+            "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium",
+            roleBadgeClass(role),
+          )}
+        >
+          <RoleIcon role={role} />
+          {lang === "vi" ? ROLE_LABELS[role].vi : ROLE_LABELS[role].en}
+        </span>
+      ))}
+    </div>
+  );
 }
 
 type UsersTableProps = {
@@ -28,7 +50,7 @@ type UsersTableProps = {
 };
 
 export default function UsersTable({ users, onManage, search }: UsersTableProps) {
-  const { t, lang } = useUiCopy();
+  const { t } = useUiCopy();
   const { user: actor } = useAuth();
 
   const q = search.trim().toLowerCase();
@@ -70,7 +92,8 @@ export default function UsersTable({ users, onManage, search }: UsersTableProps)
             {sorted.map((u) => {
               const editable = actor ? canManageUser(actor.role, u.role) : false;
               const protectedRow = isSuperAdminProtected(u.role);
-              const permCount = u.role === "SUPER_ADMIN" ? "—" : String(countGrantedPermissions(u.permissions));
+              const permCount =
+                u.role === "SUPER_ADMIN" || u.role === "TESTER" ? "—" : String(countGrantedPermissions(u.permissions));
               return (
                 <tr key={u.id} className="hover:bg-muted/30 transition-colors">
                   <td className="px-4 py-3">
@@ -88,15 +111,7 @@ export default function UsersTable({ users, onManage, search }: UsersTableProps)
                     </div>
                   </td>
                   <td className="px-4 py-3">
-                    <span
-                      className={cn(
-                        "inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium",
-                        roleBadgeClass(u.role),
-                      )}
-                    >
-                      <RoleIcon role={u.role} />
-                      {lang === "vi" ? ROLE_LABELS[u.role].vi : ROLE_LABELS[u.role].en}
-                    </span>
+                    <RoleChips roles={u.roles} />
                   </td>
                   <td className="px-4 py-3 text-muted-foreground">{permCount}</td>
                   <td className="px-4 py-3">

@@ -78,8 +78,10 @@ export interface TesterProfile {
 }
 
 export interface TesterMe {
-  user: { id: string; email: string; name: string | null; avatarUrl: string | null; role: string };
+  user: { id: string; email: string; name: string | null; avatarUrl: string | null; role: string; roles: string[] };
   canManage: boolean;
+  /** Có role Sourcing đã duyệt — hiện link sang web Sourcing. */
+  hasSourcing: boolean;
   profile: TesterProfile | null;
   answers: SurveyAnswers | null;
   submittedAt: string | null;
@@ -120,7 +122,9 @@ export interface AdminTesterRow {
   email: string;
   name: string;
   avatarUrl: string | null;
-  role: string;
+  roles: string[];
+  /** false = có role TESTER nhưng chưa làm khảo sát */
+  hasProfile: boolean;
   office: string | null;
   team: string | null;
   platforms: string[];
@@ -185,6 +189,14 @@ export interface TesterRecommendation {
   activeTests: number;
   testTimeLabel: string | null;
   assigned: boolean;
+}
+
+export interface TesterPublicInfo {
+  genres: Array<{ key: string; label: string }>;
+  benefitHoursPerUnit: number;
+  workload: Array<{ label: string; testDays: number; hoursPerDay: number; workloadHours: number }>;
+  rewards: Array<{ condition: string; items: Array<{ game: string; reward: string }> }>;
+  stats: { testers: number; campaigns: number; completedTests: number };
 }
 
 export interface TesterAdminMeta {

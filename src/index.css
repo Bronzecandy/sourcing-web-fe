@@ -69,3 +69,131 @@ body {
     radial-gradient(90% 80% at 0% 100%, rgb(57 204 251 / 0.25), transparent 60%),
     linear-gradient(135deg, #09026b 0%, #3a20b3 55%, #313bee 100%);
 }
+
+/* ---- Tester Program (tp-*) ---- */
+.tp-root {
+  font-family: "Be Vietnam Pro", "Inter", system-ui, sans-serif;
+  color: var(--color-brand-navy);
+  background: #f5f4ff;
+}
+
+.tp-display {
+  font-family: "Baloo 2", "Fredoka", "Arial Rounded MT Bold", system-ui, sans-serif;
+  letter-spacing: -0.01em;
+  line-height: 1.05;
+}
+
+.tp-dots {
+  background-image: radial-gradient(rgb(203 206 252 / 0.18) 1px, transparent 1px);
+  background-size: 22px 22px;
+}
+
+.tp-reveal {
+  opacity: 0;
+  transform: translateY(28px);
+  transition:
+    opacity 0.8s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.8s cubic-bezier(0.16, 1, 0.3, 1);
+  transition-delay: var(--tp-delay, 0ms);
+}
+.tp-reveal[data-shown="true"] {
+  opacity: 1;
+  transform: none;
+}
+
+@keyframes tp-rise {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.tp-rise {
+  animation: tp-rise 0.9s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: var(--tp-delay, 0ms);
+}
+
+@keyframes tp-float {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-14px);
+  }
+}
+.tp-float {
+  animation: tp-float 7s ease-in-out infinite;
+}
+
+@keyframes tp-twinkle {
+  0%,
+  100% {
+    opacity: 0.35;
+    transform: scale(0.8) rotate(0deg);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.1) rotate(18deg);
+  }
+}
+.tp-twinkle {
+  animation: tp-twinkle 3.4s ease-in-out infinite;
+  animation-delay: var(--tp-delay, 0ms);
+}
+
+@keyframes tp-glow {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(4%, -5%, 0) scale(1.08);
+  }
+}
+.tp-glow {
+  animation: tp-glow 16s ease-in-out infinite;
+}
+
+@keyframes tp-marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(-50%);
+  }
+}
+.tp-marquee {
+  animation: tp-marquee 46s linear infinite;
+}
+.tp-marquee-reverse {
+  animation-direction: reverse;
+}
+.tp-marquee-track:hover .tp-marquee {
+  animation-play-state: paused;
+}
+
+.tp-faq summary::-webkit-details-marker {
+  display: none;
+}
+.tp-faq[open] .tp-faq-icon {
+  transform: rotate(45deg);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tp-reveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  .tp-rise,
+  .tp-float,
+  .tp-twinkle,
+  .tp-glow,
+  .tp-marquee {
+    animation: none;
+  }
+}

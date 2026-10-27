@@ -62,7 +62,7 @@ export async function createAdminUser(body: {
   email: string;
   name?: string | null;
   status?: "PENDING" | "ACTIVE";
-  role?: UserRole;
+  roles?: UserRole[];
   permissions?: Partial<Record<PermissionKey, boolean>>;
 }): Promise<AdminUserRow> {
   const { data } = await api.post<ApiResponse<AdminUserRow>>("/admin/users", body);
@@ -73,7 +73,7 @@ export async function patchAdminUser(
   id: string,
   body: {
     status?: "PENDING" | "ACTIVE";
-    role?: UserRole;
+    roles?: UserRole[];
     permissions?: Partial<Record<PermissionKey, boolean>>;
   },
 ): Promise<AdminUserRow> {

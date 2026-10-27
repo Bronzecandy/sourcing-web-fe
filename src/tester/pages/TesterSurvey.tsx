@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, ChevronLeft, ChevronRight, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Check, ChevronLeft, ChevronRight, Loader2, Plus, Send, Trash2 } from "lucide-react";
 import { useToast } from "@/components/ui/Toast";
 import { cn } from "@/lib/utils";
 import { testerApi, TesterApiError } from "../api";
 import type { SurveyAnswers, SurveyQuestion } from "../types";
+import PageHero, { PageBody } from "../components/PageHero";
+import { card, ctaYellow, ghostOnDark, ghostOnLight } from "../components/styles";
 import {
   EMPTY_ROW,
   STEPS,
@@ -91,7 +93,7 @@ export default function TesterSurvey() {
       await testerApi.submitSurvey(payload, startedAt);
       await queryClient.invalidateQueries({ queryKey: ["tester-me"] });
       toast.success("Đã lưu hồ sơ. Hệ thống đang chấm điểm theo dòng game, vài phút sau sẽ có kết quả.");
-      navigate("/tester");
+      navigate("/tester/profile");
     } catch (err) {
       if (err instanceof TesterApiError && err.issues.length > 0) toast.error(err.issues.join(" · "));
       else toast.error(err instanceof Error ? err.message : "Không lưu được bảng hỏi");
@@ -100,80 +102,100 @@ export default function TesterSurvey() {
     }
   };
 
-  if (form.isLoading || me.isLoading) return <p className="text-sm text-muted-foreground">Đang tải bảng hỏi…</p>;
-  if (form.error || !form.data) return <p className="text-sm text-destructive">Không tải được bảng hỏi.</p>;
+  const backToProfile = (
+    <Link to="/tester/profile" className={ghostOnDark}>
+      <ArrowLeft className="h-4 w-4" />
+      Về hồ sơ
+    </Link>
+  );
+
+  if (form.isLoading || me.isLoading) {
+    return (
+      <PageHero title="Khảo sát hồ sơ tester" actions={backToProfile}>
+        <Loader2 className="mt-6 h-6 w-6 animate-spin text-white/80" />
+      </PageHero>
+    );
+  }
+  if (form.error || !form.data) {
+    return (
+      <>
+        <PageHero title="Khảo sát hồ sơ tester" actions={backToProfile} />
+        <PageBody>
+          <p className={cn(card, "p-6 text-brand-magenta")}>Không tải được bảng hỏi. Thử tải lại trang.</p>
+        </PageBody>
+      </>
+    );
+  }
 
   const last = step === STEPS.length - 1;
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold text-brand-navy">{form.data.title}</h1>
-        <p className="mt-1 text-sm text-muted-foreground">{form.data.introduction}</p>
-      </div>
+    <>
+      <PageHero title={form.data.title} subtitle={form.data.introduction} actions={backToProfile} />
+      <PageBody>
+        <div className="mx-auto max-w-3xl space-y-6">
+          <ol className="grid grid-cols-3 gap-2 sm:gap-3">
+            {STEPS.map((s, i) => (
+              <li key={s.id}>
+                <button
+                  type="button"
+                  onClick={() => i < step && setStep(i)}
+                  className={cn(
+                    "h-full w-full rounded-2xl border bg-white px-3 py-3 text-left text-sm transition-[box-shadow,border-color] sm:px-4",
+                    i === step
+                      ? "border-brand-violet shadow-[0_16px_32px_-20px_rgb(58_32_179/0.6)] ring-1 ring-brand-violet/30"
+                      : "border-brand-navy/10",
+                    i < step ? "cursor-pointer" : "cursor-default",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "mr-2 inline-flex h-7 w-7 items-center justify-center rounded-full text-xs font-bold",
+                      i < step
+                        ? "bg-brand-mint text-brand-navy"
+                        : i === step
+                          ? "bg-brand-navy text-brand-yellow"
+                          : "bg-[#f5f4ff] text-brand-navy/50",
+                    )}
+                  >
+                    {i < step ? <Check className="h-3.5 w-3.5" /> : i + 1}
+                  </span>
+                  <span className="font-semibold text-brand-navy">{s.title}</span>
+                  <span className="mt-1 hidden text-xs text-brand-navy/55 sm:block">{s.description}</span>
+                </button>
+              </li>
+            ))}
+          </ol>
 
-      <ol className="grid grid-cols-3 gap-2">
-        {STEPS.map((s, i) => (
-          <li key={s.id}>
+          <div className="space-y-4">
+            {stepQuestions.map((q) => (
+              <QuestionCard key={q.code} q={q} answers={answers} error={errors[q.code]} onChange={setAnswer} />
+            ))}
+          </div>
+
+          <div className="flex items-center justify-between gap-3">
             <button
               type="button"
-              onClick={() => i < step && setStep(i)}
-              className={cn(
-                "w-full rounded-xl border px-3 py-2 text-left text-sm transition",
-                i === step ? "border-brand-violet bg-white shadow-sm" : "border-transparent bg-white/60",
-                i < step ? "cursor-pointer" : "cursor-default",
-              )}
+              disabled={step === 0}
+              onClick={() => setStep((s) => Math.max(0, s - 1))}
+              className={ghostOnLight}
             >
-              <span
-                className={cn(
-                  "mr-2 inline-flex h-6 w-6 items-center justify-center rounded-full text-xs font-bold",
-                  i < step ? "bg-brand-mint text-brand-navy" : i === step ? "bg-brand-violet text-white" : "bg-muted text-muted-foreground",
-                )}
-              >
-                {i < step ? <Check className="h-3.5 w-3.5" /> : i + 1}
-              </span>
-              <span className="font-semibold">{s.title}</span>
-              <span className="mt-0.5 hidden text-xs text-muted-foreground sm:block">{s.description}</span>
+              <ChevronLeft className="h-4 w-4" /> Quay lại
             </button>
-          </li>
-        ))}
-      </ol>
-
-      <div className="space-y-4">
-        {stepQuestions.map((q) => (
-          <QuestionCard key={q.code} q={q} answers={answers} error={errors[q.code]} onChange={setAnswer} />
-        ))}
-      </div>
-
-      <div className="flex items-center justify-between">
-        <button
-          type="button"
-          disabled={step === 0}
-          onClick={() => setStep((s) => Math.max(0, s - 1))}
-          className="inline-flex items-center gap-1 rounded-lg border border-border bg-white px-4 py-2 text-sm font-medium disabled:opacity-40"
-        >
-          <ChevronLeft className="h-4 w-4" /> Quay lại
-        </button>
-        {last ? (
-          <button
-            type="button"
-            disabled={submitting}
-            onClick={() => void submit()}
-            className="inline-flex items-center gap-2 rounded-lg bg-brand-violet px-5 py-2 text-sm font-semibold text-white disabled:opacity-60"
-          >
-            {submitting ? "Đang lưu…" : "Gửi bảng hỏi"}
-          </button>
-        ) : (
-          <button
-            type="button"
-            onClick={goNext}
-            className="inline-flex items-center gap-1 rounded-lg bg-brand-violet px-5 py-2 text-sm font-semibold text-white"
-          >
-            Tiếp tục <ChevronRight className="h-4 w-4" />
-          </button>
-        )}
-      </div>
-    </div>
+            {last ? (
+              <button type="button" disabled={submitting} onClick={() => void submit()} className={cn(ctaYellow, "px-6 py-2.5 text-sm")}>
+                {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                {submitting ? "Đang lưu…" : "Gửi khảo sát"}
+              </button>
+            ) : (
+              <button type="button" onClick={goNext} className={cn(ctaYellow, "px-6 py-2.5 text-sm")}>
+                Tiếp tục <ChevronRight className="h-4 w-4" />
+              </button>
+            )}
+          </div>
+        </div>
+      </PageBody>
+    </>
   );
 }
 
@@ -193,9 +215,9 @@ function QuestionCard({
   return (
     <section
       id={`q-${q.code}`}
-      className={cn("rounded-2xl border bg-white p-5 shadow-sm", error ? "border-destructive/60" : "border-border")}
+      className={cn(card, "scroll-mt-24 p-5 sm:p-6", error && "border-brand-magenta/60 ring-1 ring-brand-magenta/30")}
     >
-      <p className="font-semibold text-foreground">
+      <p className="font-semibold text-brand-navy">
         {title}
         {q.mustAnswer && <span className="text-destructive"> *</span>}
       </p>

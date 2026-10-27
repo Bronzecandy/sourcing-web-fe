@@ -41,7 +41,9 @@ export default function PendingApprovalQueue({
       <ul className="space-y-2">
         {users.map((u) => {
           const permCount = countGrantedPermissions(u.permissions);
-          const roleLabel = lang === "vi" ? ROLE_LABELS[u.role].vi : ROLE_LABELS[u.role].en;
+          const roleLabel = u.roles
+            .map((r) => (lang === "vi" ? ROLE_LABELS[r].vi : ROLE_LABELS[r].en))
+            .join(" + ");
           const busy = approvingId === u.id;
           return (
             <li

@@ -1,7 +1,22 @@
-import type { UserRole } from "@/types/auth";
+import { SOURCING_ROLES, type SourcingRole, type UserRole } from "@/types/auth";
 
 export function isPanelAdmin(role: UserRole): boolean {
   return role === "SUPER_ADMIN" || role === "ADMIN";
+}
+
+export function sourcingRoleOf(roles: readonly UserRole[]): SourcingRole | null {
+  for (const r of SOURCING_ROLES) if (roles.includes(r)) return r;
+  return null;
+}
+
+export function primaryRoleOf(roles: readonly UserRole[]): UserRole {
+  return sourcingRoleOf(roles) ?? (roles.includes("TESTER") ? "TESTER" : "USER");
+}
+
+export function buildRoles(sourcing: SourcingRole | null, tester: boolean): UserRole[] {
+  const roles: UserRole[] = sourcing ? [sourcing] : [];
+  if (tester) roles.push("TESTER");
+  return roles.length > 0 ? roles : ["USER"];
 }
 
 export function roleHasAllPermissions(role: UserRole): boolean {
@@ -62,14 +77,14 @@ export const ROLE_LABELS: Record<
   USER: {
     vi: "User",
     en: "User",
-    descVi: "Mặc định khi đăng nhập — cần được duyệt và cấp quyền",
-    descEn: "Default on login — needs approval and permissions",
+    descVi: "Mặc định khi đăng nhập Sourcing — cần được duyệt và cấp quyền",
+    descEn: "Default on Sourcing login — needs approval and permissions",
   },
   TESTER: {
-    vi: "Tester (User Tester Program)",
-    en: "Tester (Tester Program user)",
-    descVi: "Đăng ký qua /tester — chỉ dùng Tester Program, không có quyền Sourcing",
-    descEn: "Signed up via /tester — Tester Program only, no Sourcing access",
+    vi: "Tester",
+    en: "Tester",
+    descVi: "Thành viên Tester Program: làm khảo sát, nhận lời mời test, đổi benefit",
+    descEn: "Tester Program member: survey, test invitations, benefits",
   },
 };
 

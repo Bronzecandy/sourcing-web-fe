@@ -1,4 +1,4 @@
-import { NavLink } from "react-router-dom";
+import { Link, NavLink, useLocation } from "react-router-dom";
 import {
   LayoutDashboard,
   Trophy,
@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import BrandLogo from "@/components/brand/BrandLogo";
 import type { PermissionKey } from "@/types/auth";
-import { hasAnyPermission } from "@/lib/permissions";
+import { hasAnyPermission, hasPermission } from "@/lib/permissions";
 
 const NAV_ITEMS: Array<{
   to: string;
@@ -68,18 +68,15 @@ const NAV_ITEMS: Array<{
     label: "Rubric Libraries",
     permissions: ["libraries.read", "libraries.write"],
   },
-  {
-    to: "/tester/admin",
-    icon: Gamepad2,
-    label: "Tester Program",
-    permissions: ["tester.manage"],
-  },
 ];
 
 export default function Sidebar() {
   const { user, logout } = useAuth();
+  const { pathname } = useLocation();
 
   const visibleNav = NAV_ITEMS.filter((item) => hasAnyPermission(user, item.permissions));
+  const showAdmin = Boolean(user?.isPanelAdmin || hasPermission(user, "tester.manage"));
+  const adminActive = pathname.startsWith("/admin");
 
   return (
     <aside className="fixed left-0 top-0 h-screen w-64 bg-sidebar text-sidebar-foreground flex flex-col z-50">
@@ -107,25 +104,32 @@ export default function Sidebar() {
             {item.label}
           </NavLink>
         ))}
-        {user?.isPanelAdmin && (
-          <NavLink
-            to="/admin/users"
-            className={({ isActive }) =>
-              cn(
-                "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
-                isActive
-                  ? "bg-sidebar-accent text-white"
-                  : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-white",
-              )
-            }
+        {showAdmin && (
+          <Link
+            to={user?.isPanelAdmin ? "/admin/users" : "/admin/testers"}
+            className={cn(
+              "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
+              adminActive
+                ? "bg-sidebar-accent text-white"
+                : "text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-white",
+            )}
           >
             <Shield className="w-5 h-5 shrink-0" />
             Admin
-          </NavLink>
+          </Link>
         )}
       </nav>
 
       <div className="px-3 py-4 border-t border-sidebar-accent space-y-2">
+        {user?.isTester && (
+          <Link
+            to="/tester/profile"
+            className="flex w-full items-center gap-3 px-3 py-2 rounded-lg text-sm text-sidebar-foreground/70 hover:bg-sidebar-accent/50 hover:text-white"
+          >
+            <Gamepad2 className="w-5 h-5" />
+            Tester Program
+          </Link>
+        )}
         <button
           type="button"
           onClick={() => logout()}

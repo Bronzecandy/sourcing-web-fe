@@ -1,11 +1,11 @@
 import { lazy, Suspense, useEffect } from "react";
-import { BrowserRouter, Routes, Route, Outlet } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Outlet, Navigate } from "react-router-dom";
 import Layout from "./components/layout/Layout";
 import { ContentLangProvider } from "./lib/content-language";
 import { AuthProvider } from "./contexts/AuthContext";
 import { ToastProvider } from "./components/ui/Toast";
 import { ProtectedAppRoute, PublicOnlyRoute, WaitingRoute } from "./components/ProtectedRoute";
-import { TesterAdminRoute, TesterAuthRoute, TesterPublicRoute } from "./tester/TesterGuards";
+import { TesterAuthRoute, TesterLoginRedirect } from "./tester/TesterGuards";
 import { queryClient } from "./lib/query-client";
 import {
   fetchDashboard,
@@ -23,17 +23,22 @@ const AnalysisDetail = lazy(() => import("./pages/AnalysisDetail"));
 const Libraries = lazy(() => import("./pages/Libraries"));
 const Login = lazy(() => import("./pages/Login"));
 const Waiting = lazy(() => import("./pages/Waiting"));
+const AdminLayout = lazy(() => import("./pages/admin/AdminLayout"));
 const AdminUsers = lazy(() => import("./pages/AdminUsers"));
+const AdminTesters = lazy(() => import("./pages/admin/AdminTesters"));
+const AdminTestCampaigns = lazy(() => import("./pages/admin/AdminTestCampaigns"));
+const AdminTestCampaignDetail = lazy(() => import("./pages/admin/AdminTestCampaignDetail"));
+const AdminTesterBenefits = lazy(() => import("./pages/admin/AdminTesterBenefits"));
+const AdminTesterSurvey = lazy(() => import("./pages/admin/AdminTesterSurvey"));
 const Distribution = lazy(() => import("./pages/Distribution"));
 const RadarRecap = lazy(() => import("./pages/RadarRecap"));
 const Compare = lazy(() => import("./pages/Compare"));
-const TesterLayout = lazy(() => import("./tester/TesterLayout"));
-const TesterLogin = lazy(() => import("./tester/pages/TesterLogin"));
-const TesterHome = lazy(() => import("./tester/pages/TesterHome"));
+const TesterShell = lazy(() => import("./tester/TesterShell"));
+const TesterLanding = lazy(() => import("./tester/pages/TesterLanding"));
+const TesterProfile = lazy(() => import("./tester/pages/TesterProfile"));
 const TesterSurvey = lazy(() => import("./tester/pages/TesterSurvey"));
 const TesterTests = lazy(() => import("./tester/pages/TesterTests"));
 const TesterBenefits = lazy(() => import("./tester/pages/TesterBenefits"));
-const TesterAdmin = lazy(() => import("./tester/pages/admin/TesterAdmin"));
 
 function PageLoader() {
   return (
@@ -83,20 +88,17 @@ export default function App() {
               <Route element={<WaitingRoute />}>
                 <Route path="/waiting" element={<Waiting />} />
               </Route>
-              <Route element={<TesterPublicRoute />}>
-                <Route path="/tester/login" element={<TesterLogin />} />
-              </Route>
-              <Route path="/tester" element={<TesterAuthRoute />}>
-                <Route element={<TesterLayout />}>
-                  <Route index element={<TesterHome />} />
+              <Route path="/tester" element={<TesterShell />}>
+                <Route index element={<TesterLanding />} />
+                <Route path="login" element={<TesterLoginRedirect />} />
+                <Route path="admin/*" element={<Navigate to="/admin/users?role=tester" replace />} />
+                <Route element={<TesterAuthRoute />}>
+                  <Route path="profile" element={<TesterProfile />} />
                   <Route path="survey" element={<TesterSurvey />} />
                   <Route path="tests" element={<TesterTests />} />
                   <Route path="benefits" element={<TesterBenefits />} />
-                  <Route path="admin" element={<TesterAdminRoute />}>
-                    <Route path="*" element={<TesterAdmin />} />
-                    <Route index element={<TesterAdmin />} />
-                  </Route>
                 </Route>
+                <Route path="*" element={<Navigate to="/tester" replace />} />
               </Route>
               <Route element={<ProtectedAppRoute />}>
                 <Route element={<Layout />}>
@@ -113,7 +115,15 @@ export default function App() {
                     <Route index element={<AIAnalysis />} />
                   </Route>
                   <Route path="/libraries" element={<Libraries />} />
-                  <Route path="/admin/users" element={<AdminUsers />} />
+                  <Route path="/admin" element={<AdminLayout />}>
+                    <Route index element={<Navigate to="/admin/users" replace />} />
+                    <Route path="users" element={<AdminUsers />} />
+                    <Route path="testers" element={<AdminTesters />} />
+                    <Route path="test-campaigns" element={<AdminTestCampaigns />} />
+                    <Route path="test-campaigns/:id" element={<AdminTestCampaignDetail />} />
+                    <Route path="tester-benefits" element={<AdminTesterBenefits />} />
+                    <Route path="tester-survey" element={<AdminTesterSurvey />} />
+                  </Route>
                 </Route>
               </Route>
             </Routes>

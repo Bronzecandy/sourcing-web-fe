@@ -18,7 +18,7 @@ export function PublicOnlyRoute() {
   if (loading) return <Spinner />;
 
   if (user) {
-    if (user.role === "TESTER") return <Navigate to="/tester" replace />;
+    if (user.role === "TESTER") return <Navigate to="/tester/profile" replace />;
     if (user.status === "PENDING") {
       return <Navigate to="/waiting" replace />;
     }
@@ -29,15 +29,18 @@ export function PublicOnlyRoute() {
   return <Outlet />;
 }
 
+/** Các tab admin dành cho quyền tester.manage (không cần là Admin). */
+const TESTER_ADMIN_PATH = /^\/admin\/(testers|test-campaigns|tester-benefits|tester-survey)(\/|$)/;
+
 function firstAllowedPath(user: NonNullable<ReturnType<typeof useAuth>["user"]>): string {
-  if (user.role === "TESTER") return "/tester";
+  if (user.role === "TESTER") return "/tester/profile";
   if (user.isPanelAdmin) {
     const data = PERMISSION_ROUTE_FALLBACK.find((r) => hasPermission(user, r.perm));
     return data?.path ?? "/admin/users";
   }
   const hit = PERMISSION_ROUTE_FALLBACK.find((r) => hasPermission(user, r.perm));
   if (hit) return hit.path;
-  return hasPermission(user, "tester.manage") ? "/tester/admin" : "/waiting";
+  return hasPermission(user, "tester.manage") ? "/admin/testers" : "/waiting";
 }
 
 export function ProtectedAppRoute() {
@@ -51,7 +54,7 @@ export function ProtectedAppRoute() {
   }
 
   if (user.role === "TESTER") {
-    return <Navigate to="/tester" replace />;
+    return <Navigate to="/tester/profile" replace />;
   }
 
   if (user.status === "PENDING") {
@@ -59,7 +62,9 @@ export function ProtectedAppRoute() {
   }
 
   if (location.pathname.startsWith("/admin")) {
-    if (!user.isPanelAdmin) {
+    const allowed =
+      user.isPanelAdmin || (TESTER_ADMIN_PATH.test(location.pathname) && hasPermission(user, "tester.manage"));
+    if (!allowed) {
       return <Navigate to={firstAllowedPath(user)} replace />;
     }
     return <Outlet />;
@@ -83,7 +88,7 @@ export function WaitingRoute() {
   }
 
   if (user.role === "TESTER") {
-    return <Navigate to="/tester" replace />;
+    return <Navigate to="/tester/profile" replace />;
   }
 
   if (user.status === "ACTIVE") {

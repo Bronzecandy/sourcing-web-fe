@@ -9,6 +9,7 @@ import type {
   TesterAdminMeta,
   TesterBenefits,
   TesterMe,
+  TesterPublicInfo,
   TesterRecommendation,
   TesterTest,
 } from "./types";
@@ -37,6 +38,7 @@ async function unwrap<T>(p: Promise<{ data: Envelope<T> }>): Promise<T> {
 }
 
 export const testerApi = {
+  publicInfo: () => unwrap<TesterPublicInfo>(api.get("/tester/public")),
   me: () => unwrap<TesterMe>(api.get("/tester/me")),
   survey: () => unwrap<SurveyForm>(api.get("/tester/survey")),
   submitSurvey: (answers: SurveyAnswers, startedAt: string) =>
