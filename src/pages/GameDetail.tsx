@@ -57,16 +57,18 @@ export default function GameDetail() {
   const [reviewPage, setReviewPage] = useState(1);
   const appId = parseInt(id || "0");
 
-  const { data: game, isLoading } = useQuery({
+  const { data: game, isLoading, isError, error } = useQuery({
     queryKey: ["game", appId, historyRange, contentLang],
     queryFn: () => fetchGameDetail(appId, historyRange, contentLang),
     enabled: appId > 0,
+    retry: 0,
   });
 
   const { data: reviews } = useQuery({
     queryKey: ["reviews", appId, reviewPage],
     queryFn: () => fetchGameReviews(appId, reviewPage),
     enabled: appId > 0 && canReviews,
+    retry: 0,
   });
 
   const [potentialDays, setPotentialDays] = useState(14);
@@ -74,6 +76,7 @@ export default function GameDetail() {
     queryKey: ["potential-breakdown", appId, potentialDays],
     queryFn: () => fetchGamePotentialBreakdown(appId, potentialDays, "combined"),
     enabled: appId > 0 && canPotential,
+    retry: 0,
   });
 
   const queryClient = useQueryClient();
@@ -124,10 +127,14 @@ export default function GameDetail() {
     );
   }
 
-  if (!game) {
+  if (isError || !game) {
     return (
       <div className="text-center py-20">
-        <p className="text-muted-foreground">{t("Không tìm thấy game", "Game not found")}</p>
+        <p className="text-muted-foreground">
+          {isError
+            ? ((error as Error)?.message || t("Không tải được chi tiết game", "Could not load game detail"))
+            : t("Không tìm thấy game", "Game not found")}
+        </p>
         <button onClick={() => navigate(-1)} className="mt-4 text-primary hover:underline">{t("Quay lại", "Go back")}</button>
       </div>
     );
@@ -169,6 +176,14 @@ export default function GameDetail() {
         seedGames={[{ appId: game.appId, title: game.title, iconUrl: game.iconUrl }]}
         seedTags={game.tags}
       />
+      {game.degraded && (
+        <div className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-amber-900 dark:text-amber-100">
+          {t(
+            "Crawl DB đang gián đoạn — đang hiện thông tin từ cache ranking. Biểu đồ lịch sử và review có thể trống. Phân tích AI sẽ lấy bình luận từ TapTap.",
+            "Crawl DB is down — showing ranking cache. History charts and reviews may be empty. AI analysis will fetch TapTap reviews.",
+          )}
+        </div>
+      )}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <button onClick={() => navigate(-1)} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors">
           <ArrowLeft className="w-4 h-4" /> {t("Quay lại", "Back")}
