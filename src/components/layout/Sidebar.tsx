@@ -9,6 +9,7 @@ import {
   Library,
   Shield,
   LogOut,
+  Gamepad2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -66,6 +67,12 @@ const NAV_ITEMS: Array<{
     icon: Library,
     label: "Rubric Libraries",
     permissions: ["libraries.read", "libraries.write"],
+  },
+  {
+    to: "/tester/admin",
+    icon: Gamepad2,
+    label: "Tester Program",
+    permissions: ["tester.manage"],
   },
 ];
 

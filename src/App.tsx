@@ -5,6 +5,7 @@ import { ContentLangProvider } from "./lib/content-language";
 import { AuthProvider } from "./contexts/AuthContext";
 import { ToastProvider } from "./components/ui/Toast";
 import { ProtectedAppRoute, PublicOnlyRoute, WaitingRoute } from "./components/ProtectedRoute";
+import { TesterAdminRoute, TesterAuthRoute, TesterPublicRoute } from "./tester/TesterGuards";
 import { queryClient } from "./lib/query-client";
 import {
   fetchDashboard,
@@ -26,6 +27,13 @@ const AdminUsers = lazy(() => import("./pages/AdminUsers"));
 const Distribution = lazy(() => import("./pages/Distribution"));
 const RadarRecap = lazy(() => import("./pages/RadarRecap"));
 const Compare = lazy(() => import("./pages/Compare"));
+const TesterLayout = lazy(() => import("./tester/TesterLayout"));
+const TesterLogin = lazy(() => import("./tester/pages/TesterLogin"));
+const TesterHome = lazy(() => import("./tester/pages/TesterHome"));
+const TesterSurvey = lazy(() => import("./tester/pages/TesterSurvey"));
+const TesterTests = lazy(() => import("./tester/pages/TesterTests"));
+const TesterBenefits = lazy(() => import("./tester/pages/TesterBenefits"));
+const TesterAdmin = lazy(() => import("./tester/pages/admin/TesterAdmin"));
 
 function PageLoader() {
   return (
@@ -39,7 +47,8 @@ function PrefetchWhenAuthed() {
   const { user } = useAuth();
 
   useEffect(() => {
-    if (!user || user.status !== "ACTIVE") return;
+    if (!user || user.status !== "ACTIVE" || user.role === "TESTER") return;
+    if (window.location.pathname.startsWith("/tester")) return;
     queryClient.prefetchQuery({
       queryKey: ["dashboard"],
       queryFn: fetchDashboard,
@@ -73,6 +82,21 @@ export default function App() {
               </Route>
               <Route element={<WaitingRoute />}>
                 <Route path="/waiting" element={<Waiting />} />
+              </Route>
+              <Route element={<TesterPublicRoute />}>
+                <Route path="/tester/login" element={<TesterLogin />} />
+              </Route>
+              <Route path="/tester" element={<TesterAuthRoute />}>
+                <Route element={<TesterLayout />}>
+                  <Route index element={<TesterHome />} />
+                  <Route path="survey" element={<TesterSurvey />} />
+                  <Route path="tests" element={<TesterTests />} />
+                  <Route path="benefits" element={<TesterBenefits />} />
+                  <Route path="admin" element={<TesterAdminRoute />}>
+                    <Route path="*" element={<TesterAdmin />} />
+                    <Route index element={<TesterAdmin />} />
+                  </Route>
+                </Route>
               </Route>
               <Route element={<ProtectedAppRoute />}>
                 <Route element={<Layout />}>

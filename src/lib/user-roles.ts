@@ -65,6 +65,12 @@ export const ROLE_LABELS: Record<
     descVi: "Mặc định khi đăng nhập — cần được duyệt và cấp quyền",
     descEn: "Default on login — needs approval and permissions",
   },
+  TESTER: {
+    vi: "Tester (User Tester Program)",
+    en: "Tester (Tester Program user)",
+    descVi: "Đăng ký qua /tester — chỉ dùng Tester Program, không có quyền Sourcing",
+    descEn: "Signed up via /tester — Tester Program only, no Sourcing access",
+  },
 };
 
 export const PERMISSION_GROUPS: Array<{
@@ -96,6 +102,12 @@ export const PERMISSION_GROUPS: Array<{
     labelVi: "Rubric Libraries",
     labelEn: "Rubric Libraries",
     keys: ["libraries.read", "libraries.write"],
+  },
+  {
+    id: "tester",
+    labelVi: "Tester Program",
+    labelEn: "Tester Program",
+    keys: ["tester.manage"],
   },
 ];
 
@@ -130,4 +142,10 @@ export const PERMISSION_LABELS: Record<
     hintEn: "Includes read",
   },
   "translate.use": { vi: "Dịch EN", en: "Translate to EN" },
+  "tester.manage": {
+    vi: "Quản lý Tester Program",
+    en: "Manage Tester Program",
+    hintVi: "Tester, đợt test, gợi ý, benefit",
+    hintEn: "Testers, test campaigns, recommendations, benefits",
+  },
 };

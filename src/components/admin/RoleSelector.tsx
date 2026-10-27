@@ -4,7 +4,7 @@ import { useUiCopy } from "@/lib/use-ui-copy";
 import { cn } from "@/lib/utils";
 import { Crown, Shield, Users } from "lucide-react";
 
-const ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "STAFF", "USER"];
+const ROLES: UserRole[] = ["SUPER_ADMIN", "ADMIN", "STAFF", "USER", "TESTER"];
 
 function RoleIcon({ role }: { role: UserRole }) {
   if (role === "SUPER_ADMIN") return <Crown className="w-4 h-4" />;
