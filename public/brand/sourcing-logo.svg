@@ -1,0 +1,30 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 380" role="img" aria-label="Sourcing-Game">
+  <defs>
+    <linearGradient id="sl-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1A10A0"/>
+      <stop offset="1" stop-color="#3A20B3"/>
+    </linearGradient>
+    <linearGradient id="sl-beam" x1="0.2" y1="0.85" x2="0.85" y2="0.25">
+      <stop offset="0" stop-color="#39CCFB" stop-opacity="0"/>
+      <stop offset="1" stop-color="#39CCFB"/>
+    </linearGradient>
+    <style>.w{font-family:'Baloo 2','Fredoka','Arial Rounded MT Bold','Arial Black',sans-serif;font-weight:800}</style>
+  </defs>
+  <rect width="1280" height="380" rx="48" fill="#09026B"/>
+  <g transform="translate(40 40) scale(0.586)">
+    <rect width="512" height="512" rx="120" fill="#09026B"/>
+    <rect x="16" y="16" width="480" height="480" rx="106" fill="url(#sl-bg)"/>
+    <circle cx="232" cy="290" r="168" fill="none" stroke="#313BEE" stroke-width="26" opacity="0.55"/>
+    <circle cx="232" cy="290" r="110" fill="none" stroke="#313BEE" stroke-width="26" opacity="0.9"/>
+    <circle cx="232" cy="290" r="54" fill="#09026B"/>
+    <path d="M232 290 L356 176 L384 206 Z" fill="url(#sl-beam)"/>
+    <circle cx="232" cy="290" r="20" fill="#39CCFB"/>
+    <path d="M378 70 C386 122 400 136 452 144 C400 152 386 166 378 218 C370 166 356 152 304 144 C356 136 370 122 378 70 Z" fill="#FCED3B"/>
+  </g>
+  <text x="376" y="218" class="w" font-size="150" textLength="600" lengthAdjust="spacingAndGlyphs" fill="#FFFFFF" stroke="#3A20B3" stroke-width="10" paint-order="stroke">SOURCING</text>
+  <g transform="translate(930 228) rotate(-5)">
+    <rect width="236" height="88" rx="22" fill="#FCED3B" stroke="#09026B" stroke-width="8"/>
+    <text x="118" y="63" text-anchor="middle" class="w" font-size="58" textLength="170" lengthAdjust="spacingAndGlyphs" fill="#09026B">GAME</text>
+  </g>
+  <path d="M352 52 C356 74 362 80 384 84 C362 88 356 94 352 116 C348 94 342 88 320 84 C342 80 348 74 352 52 Z" fill="#CBCEFC"/>
+</svg>

@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Sourcing-Game">
+  <defs>
+    <linearGradient id="sg-bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1A10A0"/>
+      <stop offset="1" stop-color="#3A20B3"/>
+    </linearGradient>
+    <linearGradient id="sg-beam" x1="0.2" y1="0.85" x2="0.85" y2="0.25">
+      <stop offset="0" stop-color="#39CCFB" stop-opacity="0"/>
+      <stop offset="1" stop-color="#39CCFB"/>
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="120" fill="#09026B"/>
+  <rect x="16" y="16" width="480" height="480" rx="106" fill="url(#sg-bg)"/>
+  <g fill="none">
+    <circle cx="232" cy="290" r="168" stroke="#313BEE" stroke-width="26" opacity="0.55"/>
+    <circle cx="232" cy="290" r="110" stroke="#313BEE" stroke-width="26" opacity="0.9"/>
+  </g>
+  <circle cx="232" cy="290" r="54" fill="#09026B"/>
+  <path d="M232 290 L356 176 L384 206 Z" fill="url(#sg-beam)"/>
+  <circle cx="232" cy="290" r="20" fill="#39CCFB"/>
+  <path d="M378 70 C386 122 400 136 452 144 C400 152 386 166 378 218 C370 166 356 152 304 144 C356 136 370 122 378 70 Z" fill="#FCED3B"/>
+</svg>

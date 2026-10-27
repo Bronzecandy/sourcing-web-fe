@@ -1,10 +1,12 @@
 import { Clock } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { useUiCopy } from "@/lib/use-ui-copy";
+import { useDocumentBrand } from "@/lib/brand";
 
 export default function WaitingPage() {
   const { t } = useUiCopy();
   const { user, logout } = useAuth();
+  useDocumentBrand("sourcing");
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-6">

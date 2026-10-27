@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
+import BrandLogo from "@/components/brand/BrandLogo";
 import type { PermissionKey } from "@/types/auth";
 import { hasAnyPermission } from "@/lib/permissions";
 
@@ -75,14 +76,9 @@ export default function Sidebar() {
 
   return (
     <aside className="fixed left-0 top-0 h-screen w-64 bg-sidebar text-sidebar-foreground flex flex-col z-50">
-      <div className="flex items-center gap-3 px-6 py-5 border-b border-sidebar-accent">
-        <div className="w-7 h-7 rounded-lg bg-primary/20 flex items-center justify-center text-xs font-bold text-primary">
-          S
-        </div>
-        <div className="min-w-0 flex-1">
-          <h1 className="text-lg font-bold tracking-tight truncate">Sourcing</h1>
-          <p className="text-xs text-muted-foreground truncate">{user?.email}</p>
-        </div>
+      <div className="px-5 pt-5 pb-4 border-b border-sidebar-accent">
+        <BrandLogo brand="sourcing" size="sm" />
+        <p className="mt-2 text-xs text-sidebar-foreground/60 truncate">{user?.email}</p>
       </div>
 
       <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
@@ -131,7 +127,7 @@ export default function Sidebar() {
           <LogOut className="w-5 h-5" />
           Sign out
         </button>
-        <p className="px-3 text-xs text-sidebar-foreground/50">TapTap Game Sourcing v1.0</p>
+        <p className="px-3 text-xs text-sidebar-foreground/50">Sourcing-Game v1.0</p>
       </div>
     </aside>
   );

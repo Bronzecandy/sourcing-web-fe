@@ -15,9 +15,17 @@
   --color-card-foreground: #0f172a;
   --color-background: #f8fafc;
   --color-foreground: #0f172a;
-  --color-sidebar: #1e293b;
-  --color-sidebar-foreground: #e2e8f0;
-  --color-sidebar-accent: #334155;
+  --color-sidebar: #0b0668;
+  --color-sidebar-foreground: #e4e6ff;
+  --color-sidebar-accent: #241b95;
+  --color-brand-navy: #09026b;
+  --color-brand-violet: #3a20b3;
+  --color-brand-blue: #313bee;
+  --color-brand-yellow: #fced3b;
+  --color-brand-magenta: #d6237b;
+  --color-brand-cyan: #39ccfb;
+  --color-brand-mint: #88f9a7;
+  --color-brand-lavender: #cbcefc;
   --color-up: #22c55e;
   --color-down: #ef4444;
   --color-stable: #eab308;
@@ -30,4 +38,34 @@ body {
   font-family: "Inter", system-ui, -apple-system, sans-serif;
   background-color: var(--color-background);
   color: var(--color-foreground);
+}
+
+.brand-word {
+  font-family: "Baloo 2", "Fredoka", "Arial Rounded MT Bold", system-ui, sans-serif;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: 0.01em;
+  text-shadow:
+    0 2px 0 var(--color-brand-violet),
+    0 4px 10px rgb(9 2 107 / 0.45);
+}
+
+.brand-tag {
+  font-family: "Baloo 2", "Fredoka", "Arial Rounded MT Bold", system-ui, sans-serif;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: var(--color-brand-navy);
+  background: var(--color-brand-yellow);
+  border: 2px solid var(--color-brand-navy);
+  border-radius: 0.45em;
+  padding: 0.12em 0.5em 0;
+  transform: rotate(-5deg);
+  box-shadow: 0 2px 0 var(--color-brand-navy);
+}
+
+.brand-hero {
+  background:
+    radial-gradient(120% 90% at 85% 10%, rgb(214 35 123 / 0.35), transparent 55%),
+    radial-gradient(90% 80% at 0% 100%, rgb(57 204 251 / 0.25), transparent 60%),
+    linear-gradient(135deg, #09026b 0%, #3a20b3 55%, #313bee 100%);
 }

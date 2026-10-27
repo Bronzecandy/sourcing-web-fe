@@ -2,10 +2,12 @@ import { Outlet, useLocation } from "react-router-dom";
 import Sidebar from "./Sidebar";
 import ContentLangToggle from "@/components/ContentLangToggle";
 import { useUiCopy } from "@/lib/use-ui-copy";
+import { useDocumentBrand } from "@/lib/brand";
 
 export default function Layout() {
   const { t } = useUiCopy();
   const location = useLocation();
+  useDocumentBrand("sourcing");
   return (
     <div className="min-h-screen bg-background">
       <Sidebar />
