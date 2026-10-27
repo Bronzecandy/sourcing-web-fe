@@ -25,6 +25,7 @@ import type {
   GameComparisonAI,
   SavedGameComparison,
   RadarRecapLatest,
+  RadarRunListItem,
 } from "../types";
 import type { ReviewWindow } from "@/types/review-window";
 import type { HistoryRange } from "@/types/history-range";
@@ -32,7 +33,7 @@ import type { AnalysisProgressUpdate } from "@/lib/analysis-stream";
 import { postAnalysisStream, postCsvAnalysisStream, postJsonStream } from "@/lib/analysis-stream";
 import type { AdminMeta, AdminUserRow, AuthUser, PermissionKey, UserRole } from "@/types/auth";
 
-const api = axios.create({
+export const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || "/api",
   timeout: 60_000,
   withCredentials: true,
@@ -540,11 +541,28 @@ export async function appendLibraryStudio(input: {
   if (!data.success) throw new Error(data.error || "Thêm studio thất bại");
 }
 
-/** Append one row to a library document (immediate persist, no full PUT). */
 export async function fetchRadarLatest(): Promise<RadarRecapLatest | null> {
   const { data } = await api.get<{ success: boolean; data?: RadarRecapLatest | null; error?: string }>("/radar/latest");
   if (!data.success) throw new Error(data.error || "Không tải được Radar");
   return data.data ?? null;
+}
+
+export async function fetchRadarByDate(date: string): Promise<RadarRecapLatest | null> {
+  const { data } = await api.get<{ success: boolean; data?: RadarRecapLatest | null; error?: string }>(`/radar/${date}`);
+  if (!data.success) throw new Error(data.error || "Không tải được Radar");
+  return data.data ?? null;
+}
+
+export async function fetchRadarRuns(): Promise<RadarRunListItem[]> {
+  const { data } = await api.get<{ success: boolean; data?: RadarRunListItem[]; error?: string }>("/radar/runs");
+  if (!data.success) throw new Error(data.error || "Không tải được danh sách kỳ");
+  return data.data ?? [];
+}
+
+/** Admin: chạy kỳ Radar ngay (chạy nền trên BE). */
+export async function runRadarNow(): Promise<void> {
+  const { data } = await api.post<{ success: boolean; error?: string }>("/radar/run", {});
+  if (!data.success) throw new Error(data.error || "Không chạy được Radar");
 }
 
 export async function downloadRadarFile(date: string, kind: "docx" | "xlsx"): Promise<void> {

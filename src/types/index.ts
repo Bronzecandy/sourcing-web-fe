@@ -59,6 +59,8 @@ export interface GameDetail {
     fansCount: number | null;
     reserveCount: number | null;
   }>;
+  /** True when crawl DB is down and this payload is from ranking cache / TapTap. */
+  degraded?: boolean;
 }
 
 export interface GameReview {
@@ -691,6 +693,23 @@ export interface SavedGameComparison {
   comparison: GameComparisonAI;
 }
 
+export interface RadarBullet {
+  appId: number;
+  nameCn: string;
+  nameEn: string;
+  overviewUrl: string;
+  text: string;
+  isNew: boolean;
+  repeat: boolean;
+}
+
+export interface RadarSection3 {
+  newEntries: RadarBullet[];
+  scheduleUpdates: RadarBullet[];
+  testable: RadarBullet[];
+  market: Array<{ publisher: string; items: RadarBullet[] }>;
+}
+
 export interface RadarRecapSummary {
   periodCode: string;
   dateLabel: string;
@@ -700,6 +719,63 @@ export interface RadarRecapSummary {
   upcoming: string[];
   monitorNoDateCount: number;
   counts: Array<{ label: string; counts: Record<string, number> }>;
+  previousDate?: string | null;
+  previousPeriodCode?: string | null;
+  testingThisWeek?: string[];
+  section3?: RadarSection3;
+  carryOver?: Array<{
+    appId: number;
+    title: string;
+    titleEn: string;
+    nextAction: string;
+    previousDate: string;
+    overviewUrl: string;
+  }>;
+}
+
+export interface RadarMetrics {
+  reserveCount: number | null;
+  downloadCount: number | null;
+  scale: number | null;
+  scaleKind: "reserve" | "download" | null;
+  rating: string | null;
+  fansCount: number | null;
+  audienceScore: number | null;
+  ratingScore: number | null;
+  rankQualityScore: number | null;
+  dataConfidence: number | null;
+  compositeScore: number | null;
+  momentumScore: number | null;
+  trend: string | null;
+  releaseDate: string | null;
+}
+
+export interface RadarRecapRow {
+  board: string;
+  rank: number;
+  appId: number;
+  title: string;
+  titleEn: string;
+  score: number;
+  nextAction: string;
+  insights: string;
+  reason?: string;
+  releaseLabel?: string;
+  genre?: string;
+  publisher?: string;
+  toolAdjustments?: string;
+  overviewUrl: string;
+  taptapUrl?: string;
+  screeningUrl?: string | null;
+  analysisScore?: number | null;
+  firstInRecap?: boolean;
+  newThisPeriod?: boolean;
+  metrics?: RadarMetrics;
+  schedule?: { kind: string | null; date: string | null; label: string } | null;
+  scheduleChanged?: boolean;
+  scheduleChangeNote?: string;
+  videoUrl?: string | null;
+  internalTest?: { label: string; status: string; startDate: string | null; endDate: string | null } | null;
 }
 
 export interface RadarRecapLatest {
@@ -707,17 +783,13 @@ export interface RadarRecapLatest {
   periodCode: string;
   status: string;
   summary: RadarRecapSummary | null;
-  rows: Array<{
-    board: string;
-    rank: number;
-    appId: number;
-    title: string;
-    titleEn: string;
-    score: number;
-    nextAction: string;
-    insights: string;
-    overviewUrl: string;
-  }>;
+  rows: RadarRecapRow[];
+}
+
+export interface RadarRunListItem {
+  date: string;
+  periodCode: string;
+  status: string;
 }
 
 export class CompareMissingAnalysisError extends Error {

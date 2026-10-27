@@ -1,25 +1,140 @@
-import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Copy, Download, FileSpreadsheet, FileText } from "lucide-react";
-import { downloadRadarFile, fetchRadarLatest } from "@/services/api";
+import { useMemo, useState, type ReactNode } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { Copy, FileSpreadsheet, FileText, Play } from "lucide-react";
+import {
+  downloadRadarFile,
+  fetchRadarByDate,
+  fetchRadarLatest,
+  fetchRadarRuns,
+  runRadarNow,
+} from "@/services/api";
+import type { RadarBullet, RadarRecapRow } from "@/types";
+import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
 
-const COUNT_KEYS = ["Test Viable", "Monitor - High", "Monitor - Mid", "Monitor - Low", "Temp. Ignore", "Drop"];
+const BOARDS = [
+  { id: "reserve_growth", title: "Top 20 Reserve - Growth", actionHeader: "Next Action" },
+  { id: "reserve_scale", title: "Top 20 Reserve - Scale", actionHeader: "Next Action" },
+  { id: "new_launch", title: "Top 20 New Launch", actionHeader: "Recommend Next Action" },
+] as const;
+
+const LABEL_DEFINITIONS = [
+  "Test Viable: Game có tiềm năng, đã ra mắt chính thức hoặc mở open beta, có thể lên lịch test ngay. Đi kèm sub-tier High/Medium/Low Potential.",
+  "Monitor: Game có tiềm năng, nhưng hiện chưa thể test hoặc chưa công bố thời gian ra mắt cụ thể. Đi kèm sub-tier High/Mid/Low Potential.",
+  "High Potential: Game có chỉ số cao (trên 1 triệu), NPH top-tier, dòng game phù hợp, không dính redflag, tiềm năng tốt — bao gồm cả game đã có lịch test/ra mắt cụ thể trong thời gian tới LẪN game chưa có lịch cụ thể nhưng đạt đủ tiêu chí điểm/chỉ số/NPH.",
+  "Mid/Medium Potential: Điểm potential khá (trên 75), lượt tải/đặt trước ở mức khá (trên 500K), không có barrier lớn về nội dung, cấu hình, flag.",
+  "Low Potential: Điểm potential và lượt tải/đặt trước ở mức trung bình (trên 65, trên 100K), hoặc dù điểm/chỉ số cao nhưng có barrier lớn về nội dung/cấu hình/flag (vd cấu hình yêu cầu quá cao, hoặc đã có bên phát hành/bản phát hành quốc tế-Steam tại Việt Nam).",
+  "Temporary Ignore: Game thuộc dòng phù hợp nhưng chỉ số vẫn chưa cao, có thể tạm bỏ qua.",
+  "Drop: Game có barrier rõ ràng (chủ đề nhạy cảm, gameplay niche hoặc không phù hợp với thị trường), khó có cơ hội phát hành thành công.",
+];
+
+function actionRank(action: string): number {
+  const order = [
+    "Test Viable - High Potential",
+    "Test Viable - Medium Potential",
+    "Test Viable - Low Potential",
+    "Monitor - High Potential",
+    "Monitor - Mid Potential",
+    "Monitor - Low Potential",
+    "Temporary Ignore",
+    "Drop",
+  ];
+  const i = order.indexOf(action);
+  return i === -1 ? order.length : i;
+}
+
+function actionFill(action: string): string {
+  if (action.startsWith("Test Viable")) return "#9DC3E6";
+  if (action.includes("High")) return "#A9D18E";
+  if (action.includes("Mid") || action.includes("Medium")) return "#C6E0B4";
+  if (action.includes("Low")) return "#FFE699";
+  if (action.startsWith("Temporary")) return "#FFD9A0";
+  if (action === "Drop") return "#FFC7CE";
+  return "transparent";
+}
+
+function displayName(row: { title: string; titleEn?: string }): string {
+  return row.titleEn ? `${row.title} (${row.titleEn})` : row.title;
+}
+
+function needsScreening(action: string): boolean {
+  return action.startsWith("Test Viable") || action.startsWith("Monitor");
+}
+
+function screeningText(row: RadarRecapRow): string {
+  if (row.screeningUrl && row.analysisScore != null) return `${Math.round(row.analysisScore)} — Xem chi tiết`;
+  if (row.screeningUrl) return "Xem chi tiết";
+  return needsScreening(row.nextAction) ? "Chưa có — cần screening" : "—";
+}
+
+function formatScale(n: number | null | undefined): string {
+  if (n == null) return "—";
+  if (n >= 1_000_000) return `~${(n / 1_000_000).toFixed(2)} triệu`;
+  if (n >= 1_000) return `~${Math.round(n / 1_000)}K`;
+  return String(n);
+}
+
+function scaleText(row: RadarRecapRow): string {
+  const m = row.metrics;
+  if (!m || m.scale == null) return "—";
+  return m.scaleKind === "download" ? `${formatScale(m.scale)} lượt tải` : `đặt trước ${formatScale(m.scale)}`;
+}
+
+function trendText(trend: string | null | undefined): string {
+  if (trend === "up") return "Tăng";
+  if (trend === "down") return "Giảm";
+  if (trend === "stable") return "Ổn định";
+  return "—";
+}
+
+function uniqueByScore(rows: RadarRecapRow[]): RadarRecapRow[] {
+  const byApp = new Map<number, RadarRecapRow>();
+  for (const row of rows) {
+    const prev = byApp.get(row.appId);
+    if (!prev || row.score > prev.score) byApp.set(row.appId, row);
+  }
+  return [...byApp.values()];
+}
+
+function isUpcoming(row: RadarRecapRow, today: string): boolean {
+  if (!row.nextAction.startsWith("Monitor")) return false;
+  const s = row.schedule;
+  if (!s) return Boolean(row.releaseLabel);
+  return Boolean(s.date && s.date > today && ["launch_date", "closed_beta", "test_recruit"].includes(s.kind ?? ""));
+}
+
+function hasAlert(row: RadarRecapRow): boolean {
+  return Boolean(row.firstInRecap) || (row.toolAdjustments ?? "").includes("ALERT");
+}
 
 export default function RadarRecap() {
+  const { user } = useAuth();
+  const queryClient = useQueryClient();
+  const [selected, setSelected] = useState<string>("");
+  const runs = useQuery({ queryKey: ["radar-runs"], queryFn: fetchRadarRuns });
   const { data, isLoading, error } = useQuery({
-    queryKey: ["radar-latest"],
-    queryFn: fetchRadarLatest,
+    queryKey: ["radar", selected || "latest"],
+    queryFn: () => (selected ? fetchRadarByDate(selected) : fetchRadarLatest()),
   });
   const [copied, setCopied] = useState(false);
-  const [busy, setBusy] = useState<"docx" | "xlsx" | null>(null);
+  const [busy, setBusy] = useState<"docx" | "xlsx" | "run" | null>(null);
   const [note, setNote] = useState<string | null>(null);
 
-  const copyText = data?.summary?.copyText ?? "";
+  const rows = data?.rows ?? [];
+  const unique = useMemo(() => uniqueByScore(rows), [rows]);
+  const today = data?.date ?? "";
+  const playable = unique.filter((r) => r.nextAction.startsWith("Test Viable")).sort((a, b) => b.score - a.score);
+  const upcoming = unique.filter((r) => isUpcoming(r, today)).sort((a, b) => b.score - a.score);
+  const overview = unique
+    .filter((r) => needsScreening(r.nextAction))
+    .sort((a, b) => actionRank(a.nextAction) - actionRank(b.nextAction) || b.score - a.score);
+  const summary = data?.summary ?? null;
+  const countKeys = summary?.counts[0] ? Object.keys(summary.counts[0].counts) : [];
+  const completedRuns = (runs.data ?? []).filter((r) => r.status === "completed");
 
   const copy = async () => {
-    if (!copyText) return;
-    await navigator.clipboard.writeText(copyText);
+    if (!summary?.copyText) return;
+    await navigator.clipboard.writeText(summary.copyText);
     setCopied(true);
     setTimeout(() => setCopied(false), 1600);
   };
@@ -37,101 +152,483 @@ export default function RadarRecap() {
     }
   };
 
+  const runNow = async () => {
+    setBusy("run");
+    setNote(null);
+    try {
+      await runRadarNow();
+      setNote("Đã bắt đầu chạy kỳ Radar hôm nay. Kết quả có sau vài phút, kèm tin SeaTalk.");
+      void queryClient.invalidateQueries({ queryKey: ["radar-runs"] });
+    } catch (err) {
+      setNote(err instanceof Error ? err.message : "Không chạy được Radar");
+    } finally {
+      setBusy(null);
+    }
+  };
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold">Game Radar</h1>
+          <h1 className="text-2xl font-bold">GAME RADAR & TESTING RECAP</h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Executive Summary và recap top 20 Reserve / New Launch. Kỳ mới chạy sau precompute 10:15.
+            {summary
+              ? `Executive Summary — kỳ ${data?.periodCode} (${summary.dateLabel}) · chạy mỗi tuần`
+              : "Executive Summary và 3 bảng Game Radar Recap, chạy mỗi tuần."}
           </p>
         </div>
-        {data?.summary && (
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={() => void copy()}
-              className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium hover:bg-muted"
+        <div className="flex flex-wrap items-center gap-2">
+          {completedRuns.length > 0 && (
+            <select
+              value={selected}
+              onChange={(e) => setSelected(e.target.value)}
+              className="rounded-lg border border-border bg-card px-3 py-2 text-sm"
+              aria-label="Chọn kỳ"
             >
-              <Copy className="h-4 w-4" />
-              {copied ? "Đã copy" : "Copy để gửi"}
-            </button>
+              <option value="">Kỳ mới nhất</option>
+              {completedRuns.map((r) => (
+                <option key={r.date} value={r.date}>
+                  Kỳ {r.periodCode} ({r.date})
+                </option>
+              ))}
+            </select>
+          )}
+          {summary && (
+            <>
+              <button
+                type="button"
+                onClick={() => void copy()}
+                className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium hover:bg-muted"
+              >
+                <Copy className="h-4 w-4" />
+                {copied ? "Đã copy" : "Copy để gửi"}
+              </button>
+              <button
+                type="button"
+                disabled={busy != null}
+                onClick={() => void download("docx")}
+                className="inline-flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60"
+              >
+                <FileText className="h-4 w-4" />
+                {busy === "docx" ? "Đang tải…" : "Tải Word"}
+              </button>
+              <button
+                type="button"
+                disabled={busy != null}
+                onClick={() => void download("xlsx")}
+                className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium hover:bg-muted disabled:opacity-60"
+              >
+                <FileSpreadsheet className="h-4 w-4" />
+                {busy === "xlsx" ? "Đang tải…" : "Tải Excel"}
+              </button>
+            </>
+          )}
+          {user?.isPanelAdmin && (
             <button
               type="button"
               disabled={busy != null}
-              onClick={() => void download("docx")}
-              className="inline-flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60"
+              onClick={() => void runNow()}
+              className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium hover:bg-muted disabled:opacity-60"
             >
-              <FileText className="h-4 w-4" />
-              {busy === "docx" ? "Đang tải…" : "Tải Word"}
+              <Play className="h-4 w-4" />
+              {busy === "run" ? "Đang gửi…" : "Chạy kỳ ngay"}
             </button>
-            <button
-              type="button"
-              disabled={busy != null}
-              onClick={() => void download("xlsx")}
-              className={cn(
-                "inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium hover:bg-muted disabled:opacity-60",
-              )}
-            >
-              <FileSpreadsheet className="h-4 w-4" />
-              {busy === "xlsx" ? "Đang tải…" : "Tải Excel"}
-            </button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
 
-      {note && <p className="text-sm text-destructive">{note}</p>}
-
-      {isLoading && <p className="text-sm text-muted-foreground">Đang tải kỳ mới nhất…</p>}
+      {note && <p className="text-sm text-muted-foreground">{note}</p>}
+      {isLoading && <p className="text-sm text-muted-foreground">Đang tải kỳ Radar…</p>}
       {error && (
         <p className="text-sm text-destructive">{error instanceof Error ? error.message : "Không tải được Radar"}</p>
       )}
       {!isLoading && !error && !data && (
         <div className="rounded-lg border border-border bg-card p-6 text-sm text-muted-foreground">
-          Chưa có kỳ nào. Bản đầu tiên được tạo sau cron 10:15 (Reserve tăng trưởng, Reserve quy mô, New Launch).
+          Chưa có kỳ nào. Kỳ Radar chạy mỗi Thứ Hai sau cron 10:15 (Reserve tăng trưởng, Reserve quy mô, New Launch).
         </div>
       )}
 
-      {data?.summary && (
-        <div className="space-y-4">
-          <p className="text-sm text-muted-foreground">
-            Kỳ {data.summary.dateLabel} · mã {data.periodCode}
-          </p>
-          <div className="overflow-x-auto rounded-lg border border-border">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/50">
-                <tr>
-                  <th className="px-3 py-2 text-left font-medium">Bảng</th>
-                  {COUNT_KEYS.map((k) => (
-                    <th key={k} className="px-3 py-2 text-right font-medium whitespace-nowrap">
-                      {k}
-                    </th>
+      {summary && (
+        <>
+          <section className="space-y-3">
+            <h2 className="text-lg font-semibold">1. Overview</h2>
+            <div className="rounded-lg border border-border bg-card p-4 text-sm space-y-2">
+              <p className="font-semibold">Số liệu nhanh:</p>
+              {(summary.testingThisWeek ?? []).length > 0 && (
+                <>
+                  <p className="font-medium">Game đang test trong tuần:</p>
+                  <ul className="list-[circle] pl-6 space-y-1">
+                    {summary.testingThisWeek!.map((t) => (
+                      <li key={t}>{t}</li>
+                    ))}
+                  </ul>
+                </>
+              )}
+              <p className="font-medium">Game hiện có thể test:</p>
+              {summary.testableNow.length === 0 ? (
+                <p className="pl-6 text-muted-foreground">Không có game nào đang mở test/đã ra mắt tại thời điểm chốt kỳ.</p>
+              ) : (
+                <ul className="list-[circle] pl-6 space-y-1">
+                  {summary.testableNow.map((item) => (
+                    <li key={item}>{item.split("\n")[0]}</li>
                   ))}
-                </tr>
-              </thead>
-              <tbody>
-                {data.summary.counts.map((row) => (
-                  <tr key={row.label} className="border-t border-border">
-                    <td className="px-3 py-2">{row.label}</td>
-                    {COUNT_KEYS.map((k) => (
-                      <td key={k} className="px-3 py-2 text-right tabular-nums">
-                        {row.counts[k] ?? 0}
-                      </td>
+                </ul>
+              )}
+              <p>
+                <span className="font-medium">Game Monitor chưa có thời gian:</span> {summary.monitorNoDateCount}
+              </p>
+            </div>
+
+            <h3 className="text-sm font-semibold">Bảng đếm số lượng game theo Next Action</h3>
+            <div className="overflow-x-auto rounded-lg border border-border">
+              <table className="w-full text-sm">
+                <thead className="bg-[#D9D9D9] text-foreground">
+                  <tr>
+                    <th className="px-3 py-2 text-left font-semibold">Bảng</th>
+                    {countKeys.map((key) => (
+                      <th key={key} className="px-3 py-2 text-right font-semibold whitespace-nowrap">
+                        {key}
+                      </th>
                     ))}
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <article className="rounded-lg border border-border bg-card p-5">
-            <div className="mb-3 flex items-center gap-2 text-sm font-medium">
-              <Download className="h-4 w-4" />
-              Nội dung gửi
+                </thead>
+                <tbody>
+                  {summary.counts.map((row, i) => (
+                    <tr
+                      key={row.label}
+                      className={cn("border-t border-border", i === summary.counts.length - 1 && "bg-[#EDEDED] font-semibold")}
+                    >
+                      <td className="px-3 py-2">{row.label}</td>
+                      {countKeys.map((key) => (
+                        <td key={key} className="px-3 py-2 text-right tabular-nums">
+                          {row.counts[key] ?? 0}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-            <pre className="whitespace-pre-wrap font-sans text-sm leading-6">{copyText}</pre>
-          </article>
+
+            <h3 className="text-sm font-semibold">Bảng tổng quan — toàn bộ game đang ở Test Viable / Monitor trong kỳ</h3>
+            <OverviewTable rows={overview} />
+
+            <details className="rounded-lg border border-border bg-card p-4 text-sm">
+              <summary className="cursor-pointer font-medium">Định nghĩa các nhãn</summary>
+              <ul className="mt-2 list-disc pl-5 space-y-1">
+                {LABEL_DEFINITIONS.map((d) => (
+                  <li key={d}>{d}</li>
+                ))}
+              </ul>
+            </details>
+          </section>
+
+          <section className="space-y-3">
+            <h2 className="text-lg font-semibold">2. Game Overview</h2>
+            <p className="text-sm text-muted-foreground">
+              Chỉ hiển thị game hiện chơi/test được hoặc đã có ngày test/ra mắt cụ thể:
+            </p>
+            <GameCards title="Game hiện có thể test:" rows={playable} />
+            <GameCards title="Game sắp có thể test:" rows={upcoming} />
+          </section>
+
+          <section className="space-y-3">
+            <h2 className="text-lg font-semibold">3. Executive Summary</h2>
+            {summary.section3 ? (
+              <div className="rounded-lg border border-border bg-card p-4 space-y-4 text-sm leading-6">
+                <div>
+                  <h3 className="font-semibold">Biến động đáng chú ý trong tuần:</h3>
+                  <p className="mt-2 font-medium">Mới xuất hiện:</p>
+                  <BulletList items={summary.section3.newEntries} empty="Không có game mới cần Monitor trong kỳ này." />
+                  <p className="mt-2 font-medium">Cập nhật lịch trình mới:</p>
+                  <BulletList items={summary.section3.scheduleUpdates} empty="Không có lịch ra mắt/test mới trong kỳ này." />
+                </div>
+                <div>
+                  <h3 className="font-semibold">Game có thể test:</h3>
+                  <BulletList items={summary.section3.testable} empty="Không có game nào ở mức Test Viable trong kỳ này." />
+                </div>
+                <div>
+                  <h3 className="font-semibold">Thông tin game thị trường mới</h3>
+                  {summary.section3.market.length === 0 && (
+                    <p className="text-muted-foreground">Không có game của NPH lớn trong kỳ này.</p>
+                  )}
+                  {summary.section3.market.map((block) => (
+                    <div key={block.publisher} className="mt-2">
+                      <p className="font-semibold">{block.publisher}</p>
+                      <BulletList items={block.items} empty="" />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div className="rounded-lg border border-border bg-card p-4 space-y-3 text-sm leading-6">
+                {summary.executiveParagraphs.map((paragraph) => (
+                  <p key={paragraph.slice(0, 48)}>{paragraph}</p>
+                ))}
+              </div>
+            )}
+          </section>
+
+          {(summary.carryOver ?? []).length > 0 && (
+            <section className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm space-y-2">
+              <h2 className="font-semibold">Test Viable kỳ trước đã rời Top 20 (không đưa vào report)</h2>
+              <ul className="list-disc pl-5 space-y-1">
+                {summary.carryOver!.map((c) => (
+                  <li key={c.appId}>
+                    <a href={c.overviewUrl} className="font-medium text-primary hover:underline">
+                      {displayName(c)}
+                    </a>{" "}
+                    — {c.nextAction} (kỳ {c.previousDate})
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+
+          <section className="space-y-6">
+            <div>
+              <h2 className="text-lg font-semibold">Game Radar Recap</h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                Đúng 3 sheet của file Excel: Reserve Growth, Reserve Scale, New Launch (game ra mắt trong 60 ngày).
+              </p>
+            </div>
+            {BOARDS.map((board) => (
+              <BoardTable
+                key={board.id}
+                title={`${board.title} (${data?.periodCode})`}
+                launch={board.id === "new_launch"}
+                actionHeader={board.actionHeader}
+                rows={rows.filter((row) => row.board === board.id).sort((a, b) => a.rank - b.rank)}
+              />
+            ))}
+          </section>
+        </>
+      )}
+    </div>
+  );
+}
+
+function GameLink({ row }: { row: { title: string; titleEn?: string; overviewUrl: string } }) {
+  return (
+    <a href={row.overviewUrl} className="font-semibold text-primary underline-offset-2 hover:underline">
+      {displayName(row)}
+    </a>
+  );
+}
+
+function BulletList({ items, empty }: { items: RadarBullet[]; empty: string }) {
+  if (items.length === 0) return empty ? <p className="pl-5 text-muted-foreground">{empty}</p> : null;
+  return (
+    <ul className="list-disc pl-5 space-y-1">
+      {items.map((b) => (
+        <li key={`${b.appId}-${b.text.slice(0, 20)}`}>
+          {b.isNew && <span className="font-semibold">MỚI — </span>}
+          <a href={b.overviewUrl} className="font-semibold text-primary underline-offset-2 hover:underline">
+            {b.nameEn ? `${b.nameCn} (${b.nameEn})` : b.nameCn}
+          </a>
+          <span className={cn(b.repeat && "text-muted-foreground")}>{b.text}</span>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function OverviewTable({ rows }: { rows: RadarRecapRow[] }) {
+  if (rows.length === 0) {
+    return <p className="text-sm text-muted-foreground">Không có game Test Viable hoặc Monitor trong kỳ này.</p>;
+  }
+  return (
+    <div className="overflow-x-auto rounded-lg border border-border">
+      <table className="w-full text-sm">
+        <thead className="bg-[#D9D9D9]">
+          <tr>
+            <th className="px-3 py-2 text-left font-semibold">Tên game</th>
+            <th className="px-3 py-2 text-left font-semibold whitespace-nowrap">Next Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, i) => (
+            <tr key={row.appId} className={cn("border-t border-border", i % 2 === 1 && "bg-[#F7F7F7]")}>
+              <td className="px-3 py-2">
+                <GameLink row={row} />
+              </td>
+              <td className="px-3 py-2 whitespace-nowrap" style={{ backgroundColor: actionFill(row.nextAction) }}>
+                {row.nextAction}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function GameCards({ title, rows }: { title: string; rows: RadarRecapRow[] }) {
+  return (
+    <div className="space-y-3">
+      <h3 className="text-sm font-semibold">{title}</h3>
+      {rows.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Không có</p>
+      ) : (
+        <div className="grid gap-3 lg:grid-cols-2">
+          {rows.map((row) => (
+            <div key={row.appId} className="rounded-lg border border-border bg-card p-4 text-sm">
+              <GameLink row={row} />
+              <dl className="mt-3 grid grid-cols-[9rem_1fr] gap-x-3 gap-y-1.5">
+                <Field label="Điểm Potential">{row.score.toFixed(1)}</Field>
+                <Field label="AI Screening">
+                  {row.screeningUrl ? (
+                    <a href={row.screeningUrl} className="text-primary hover:underline">
+                      {screeningText(row)}
+                    </a>
+                  ) : (
+                    screeningText(row)
+                  )}
+                </Field>
+                <Field label="Genre">{row.genre || "—"}</Field>
+                <Field label="Nhà phát hành">
+                  <span className="font-semibold">{row.publisher || "—"}</span>
+                </Field>
+                <Field label="Lịch phát hành">{row.releaseLabel || "—"}</Field>
+                <Field label="Status">{row.nextAction}</Field>
+                <Field label="Lý do">{row.reason || "—"}</Field>
+                <Field label="Video gameplay">
+                  {row.videoUrl ? (
+                    <a href={row.videoUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline">
+                      TapTap video
+                    </a>
+                  ) : (
+                    "Chưa tìm thấy"
+                  )}
+                </Field>
+                <Field label="Link TapTap">
+                  <a
+                    href={`https://www.taptap.cn/app/${row.appId}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-primary hover:underline"
+                  >
+                    taptap.cn/app/{row.appId}
+                  </a>
+                </Field>
+              </dl>
+            </div>
+          ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function Field({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <>
+      <dt className="text-muted-foreground">{label}</dt>
+      <dd>{children}</dd>
+    </>
+  );
+}
+
+function BoardTable({
+  title,
+  actionHeader,
+  launch,
+  rows,
+}: {
+  title: string;
+  actionHeader: string;
+  launch: boolean;
+  rows: RadarRecapRow[];
+}) {
+  const headers = [
+    "Game",
+    "Tên (EN)",
+    "Hạng",
+    "Quy mô & TT",
+    "Đánh giá",
+    "Chất lượng hạng",
+    "Tin cậy",
+    "Điểm",
+    "Xu hướng",
+    "Đặt trước/Tải",
+    "Insights",
+    ...(launch ? ["Ngày ra mắt"] : []),
+    actionHeader,
+    "Tool Adjustments",
+    "AI Screening",
+    "Genre",
+    "Nhà phát hành",
+    ...(launch ? [] : ["Lịch phát hành"]),
+  ];
+  return (
+    <div className="space-y-2">
+      <h3 className="text-sm font-semibold">{title}</h3>
+      <div className="overflow-x-auto rounded-lg border border-border">
+        <table className="w-full text-sm">
+          <thead className="bg-[#1F4E79] text-white">
+            <tr>
+              {headers.map((label) => (
+                <th key={label} className="px-3 py-2 text-left font-medium whitespace-nowrap">
+                  {label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((row) => {
+              const m = row.metrics;
+              return (
+                <tr key={`${row.board}-${row.rank}`} className="border-t border-border align-top">
+                  <td className={cn("px-3 py-2 font-medium whitespace-nowrap", row.firstInRecap && "bg-[#FFF2CC]")}>
+                    <a
+                      href={`https://www.taptap.cn/app/${row.appId}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="hover:underline"
+                    >
+                      {row.title}
+                    </a>
+                  </td>
+                  <td className="px-3 py-2 whitespace-nowrap">{row.titleEn || "—"}</td>
+                  <td className="px-3 py-2 tabular-nums">{row.rank}</td>
+                  <td className="px-3 py-2 tabular-nums">{m?.audienceScore ?? "—"}</td>
+                  <td className="px-3 py-2 tabular-nums">{m?.ratingScore ?? "—"}</td>
+                  <td className="px-3 py-2 tabular-nums">{m?.rankQualityScore ?? "—"}</td>
+                  <td className="px-3 py-2 tabular-nums">{m?.dataConfidence ?? "—"}</td>
+                  <td className="px-3 py-2 tabular-nums">{row.score.toFixed(1)}</td>
+                  <td className="px-3 py-2 whitespace-nowrap">{trendText(m?.trend)}</td>
+                  <td className="px-3 py-2 whitespace-nowrap">{scaleText(row)}</td>
+                  <td className="px-3 py-2 min-w-64">{row.insights || "—"}</td>
+                  {launch && <td className="px-3 py-2 whitespace-nowrap">{row.releaseLabel || "—"}</td>}
+                  <td className="px-3 py-2 whitespace-nowrap" style={{ backgroundColor: actionFill(row.nextAction) }}>
+                    {row.nextAction}
+                  </td>
+                  <td className={cn("px-3 py-2 min-w-56", hasAlert(row) && "bg-[#FFF2CC]")}>
+                    {row.toolAdjustments || "—"}
+                  </td>
+                  <td
+                    className="px-3 py-2 whitespace-nowrap"
+                    style={{
+                      backgroundColor: !row.screeningUrl && needsScreening(row.nextAction) ? "#FFC7CE" : undefined,
+                    }}
+                  >
+                    {row.screeningUrl ? (
+                      <a href={row.screeningUrl} className="text-primary underline-offset-2 hover:underline">
+                        {screeningText(row)}
+                      </a>
+                    ) : (
+                      screeningText(row)
+                    )}
+                  </td>
+                  <td className="px-3 py-2">{row.genre || "—"}</td>
+                  <td className="px-3 py-2">{row.publisher || "—"}</td>
+                  {!launch && <td className="px-3 py-2 whitespace-nowrap">{row.releaseLabel || "—"}</td>}
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }
