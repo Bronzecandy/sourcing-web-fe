@@ -1,4 +1,5 @@
 import { useMemo, useState, type ReactNode } from "react";
+import { useSearchParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Copy, FileSpreadsheet, FileText, Play } from "lucide-react";
 import {
@@ -11,6 +12,9 @@ import {
 import type { RadarBullet, RadarRecapRow } from "@/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
+import { actionFill, displayName } from "@/lib/radar";
+import RadarHistory from "@/components/radar/RadarHistory";
+import LegacyRecapView from "@/components/radar/LegacyRecapView";
 
 const BOARDS = [
   { id: "reserve_growth", title: "Top 20 Reserve - Growth", actionHeader: "Next Action" },
@@ -41,20 +45,6 @@ function actionRank(action: string): number {
   ];
   const i = order.indexOf(action);
   return i === -1 ? order.length : i;
-}
-
-function actionFill(action: string): string {
-  if (action.startsWith("Test Viable")) return "#9DC3E6";
-  if (action.includes("High")) return "#A9D18E";
-  if (action.includes("Mid") || action.includes("Medium")) return "#C6E0B4";
-  if (action.includes("Low")) return "#FFE699";
-  if (action.startsWith("Temporary")) return "#FFD9A0";
-  if (action === "Drop") return "#FFC7CE";
-  return "transparent";
-}
-
-function displayName(row: { title: string; titleEn?: string }): string {
-  return row.titleEn ? `${row.title} (${row.titleEn})` : row.title;
 }
 
 function needsScreening(action: string): boolean {
@@ -110,7 +100,9 @@ function hasAlert(row: RadarRecapRow): boolean {
 export default function RadarRecap() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
-  const [selected, setSelected] = useState<string>("");
+  const [params, setParams] = useSearchParams();
+  const selected = /^\d{4}-\d{2}-\d{2}$/.test(params.get("date") ?? "") ? params.get("date")! : "";
+  const setSelected = (date: string) => setParams(date ? { date } : {});
   const runs = useQuery({ queryKey: ["radar-runs"], queryFn: fetchRadarRuns });
   const { data, isLoading, error } = useQuery({
     queryKey: ["radar", selected || "latest"],
@@ -128,9 +120,12 @@ export default function RadarRecap() {
   const overview = unique
     .filter((r) => needsScreening(r.nextAction))
     .sort((a, b) => actionRank(a.nextAction) - actionRank(b.nextAction) || b.score - a.score);
-  const summary = data?.summary ?? null;
+  const legacy = data?.status === "imported";
+  const summary = !legacy ? (data?.summary ?? null) : null;
   const countKeys = summary?.counts[0] ? Object.keys(summary.counts[0].counts) : [];
-  const completedRuns = (runs.data ?? []).filter((r) => r.status === "completed");
+  const runInfo = (runs.data ?? []).find((r) => r.date === data?.date);
+  const canDownload = Boolean(data && (summary || legacy));
+  const hasDocx = runInfo ? runInfo.hasDocx : Boolean(summary);
 
   const copy = async () => {
     if (!summary?.copyText) return;
@@ -174,54 +169,43 @@ export default function RadarRecap() {
           <p className="text-muted-foreground text-sm mt-1">
             {summary
               ? `Executive Summary — kỳ ${data?.periodCode} (${summary.dateLabel}) · chạy mỗi tuần`
-              : "Executive Summary và 3 bảng Game Radar Recap, chạy mỗi tuần."}
+              : legacy
+                ? `Báo cáo làm tay — kỳ ${data?.periodCode}`
+                : "Executive Summary và 3 bảng Game Radar Recap, chạy mỗi tuần."}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          {completedRuns.length > 0 && (
-            <select
-              value={selected}
-              onChange={(e) => setSelected(e.target.value)}
-              className="rounded-lg border border-border bg-card px-3 py-2 text-sm"
-              aria-label="Chọn kỳ"
+          {summary?.copyText && (
+            <button
+              type="button"
+              onClick={() => void copy()}
+              className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium hover:bg-muted"
             >
-              <option value="">Kỳ mới nhất</option>
-              {completedRuns.map((r) => (
-                <option key={r.date} value={r.date}>
-                  Kỳ {r.periodCode} ({r.date})
-                </option>
-              ))}
-            </select>
+              <Copy className="h-4 w-4" />
+              {copied ? "Đã copy" : "Copy để gửi"}
+            </button>
           )}
-          {summary && (
-            <>
-              <button
-                type="button"
-                onClick={() => void copy()}
-                className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium hover:bg-muted"
-              >
-                <Copy className="h-4 w-4" />
-                {copied ? "Đã copy" : "Copy để gửi"}
-              </button>
-              <button
-                type="button"
-                disabled={busy != null}
-                onClick={() => void download("docx")}
-                className="inline-flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60"
-              >
-                <FileText className="h-4 w-4" />
-                {busy === "docx" ? "Đang tải…" : "Tải Word"}
-              </button>
-              <button
-                type="button"
-                disabled={busy != null}
-                onClick={() => void download("xlsx")}
-                className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium hover:bg-muted disabled:opacity-60"
-              >
-                <FileSpreadsheet className="h-4 w-4" />
-                {busy === "xlsx" ? "Đang tải…" : "Tải Excel"}
-              </button>
-            </>
+          {canDownload && hasDocx && (
+            <button
+              type="button"
+              disabled={busy != null}
+              onClick={() => void download("docx")}
+              className="inline-flex items-center gap-2 rounded-lg bg-primary px-3 py-2 text-sm font-medium text-primary-foreground disabled:opacity-60"
+            >
+              <FileText className="h-4 w-4" />
+              {busy === "docx" ? "Đang tải…" : legacy ? "Tải Word gốc" : "Tải Word"}
+            </button>
+          )}
+          {canDownload && (
+            <button
+              type="button"
+              disabled={busy != null}
+              onClick={() => void download("xlsx")}
+              className="inline-flex items-center gap-2 rounded-lg border border-border bg-card px-3 py-2 text-sm font-medium hover:bg-muted disabled:opacity-60"
+            >
+              <FileSpreadsheet className="h-4 w-4" />
+              {busy === "xlsx" ? "Đang tải…" : "Tải Excel"}
+            </button>
           )}
           {user?.isPanelAdmin && (
             <button
@@ -237,6 +221,8 @@ export default function RadarRecap() {
         </div>
       </div>
 
+      <RadarHistory runs={runs.data ?? []} activeDate={data?.date ?? null} onSelect={setSelected} />
+
       {note && <p className="text-sm text-muted-foreground">{note}</p>}
       {isLoading && <p className="text-sm text-muted-foreground">Đang tải kỳ Radar…</p>}
       {error && (
@@ -247,6 +233,8 @@ export default function RadarRecap() {
           Chưa có kỳ nào. Kỳ Radar chạy mỗi Thứ Hai sau cron 10:15 (Reserve tăng trưởng, Reserve quy mô, New Launch).
         </div>
       )}
+
+      {legacy && data && <LegacyRecapView data={data} />}
 
       {summary && (
         <>

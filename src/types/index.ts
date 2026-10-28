@@ -776,6 +776,13 @@ export interface RadarRecapRow {
   scheduleChangeNote?: string;
   videoUrl?: string | null;
   internalTest?: { label: string; status: string; startDate: string | null; endDate: string | null } | null;
+  /** Dòng nhập từ báo cáo làm tay (Game Radar Recap.xlsx). */
+  legacy?: boolean;
+  nextActionRaw?: string;
+  chartRank?: string;
+  trend?: string;
+  metricsText?: string;
+  screeningText?: string;
 }
 
 export interface RadarRecapLatest {
@@ -789,7 +796,24 @@ export interface RadarRecapLatest {
 export interface RadarRunListItem {
   date: string;
   periodCode: string;
+  /** completed | imported (báo cáo làm tay) | stale | failed | started */
   status: string;
+  source: "tool" | "sheet";
+  weekStart: string;
+  weekEnd: string;
+  games: number;
+  actions: { testViable: number; monitor: number; ignore: number; drop: number; other: number };
+  newGames: number;
+  scheduleUpdates: number;
+  hasDocx: boolean;
+}
+
+/** summary của kỳ nhập từ báo cáo làm tay. */
+export interface RadarLegacySummary {
+  legacy: true;
+  source: string;
+  sheets: string[];
+  docx: string | null;
 }
 
 export class CompareMissingAnalysisError extends Error {
