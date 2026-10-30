@@ -88,7 +88,10 @@ export default function AdminTestCampaignDetail() {
       </Link>
       <div className="grid gap-6 lg:grid-cols-5">
         <section className="space-y-4 rounded-xl border border-border bg-card p-5 lg:col-span-3">
-          <h2 className="text-lg font-semibold">{c.gameName}</h2>
+          <div className="flex items-center gap-3">
+            {c.iconUrl && <img src={c.iconUrl} alt="" className="h-11 w-11 shrink-0 rounded-xl bg-muted object-cover" />}
+            <h2 className="text-lg font-semibold">{c.gameName}</h2>
+          </div>
           <CampaignForm value={draft} onChange={setDraft} />
           <div className="flex justify-between gap-2">
             <button type="button" onClick={() => void remove()} className={cn(btnDanger, "px-3 py-2")}>

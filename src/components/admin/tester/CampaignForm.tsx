@@ -2,11 +2,13 @@ import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { testerApi } from "@/tester/api";
-import type { TestCampaign } from "@/tester/types";
+import type { CampaignGameOption, TestCampaign } from "@/tester/types";
+import TapTapGamePicker from "./TapTapGamePicker";
 
 export type CampaignDraft = {
   gameName: string;
   appId: string;
+  iconUrl: string;
   genre: string;
   platform: string;
   mainTags: string[];
@@ -31,6 +33,7 @@ export function draftFrom(c?: TestCampaign | null): CampaignDraft {
   return {
     gameName: c?.gameName ?? "",
     appId: c?.appId != null ? String(c.appId) : "",
+    iconUrl: c?.iconUrl ?? "",
     genre: c?.genre ?? "",
     platform: c?.platform ?? "",
     mainTags: c?.mainTags ?? [],
@@ -49,6 +52,7 @@ export function draftPayload(d: CampaignDraft): Partial<TestCampaign> & Record<s
   return {
     gameName: d.gameName.trim(),
     appId: d.appId.trim() || null,
+    iconUrl: d.iconUrl.trim() || null,
     genre: d.genre.trim() || null,
     platform: d.platform || null,
     mainTags: d.mainTags,
@@ -82,8 +86,38 @@ export default function CampaignForm({ value, onChange }: { value: CampaignDraft
     set(field, list.includes(key) ? list.filter((k) => k !== key) : [...list, key]);
   };
 
+  const pickGame = (g: CampaignGameOption) => {
+    const s = g.suggestion;
+    setTouchedWorkload(false);
+    onChange({
+      ...value,
+      gameName: s.gameName,
+      appId: String(g.id),
+      iconUrl: g.iconUrl ?? "",
+      genre: s.genre,
+      platform: s.platform ?? value.platform,
+      mainTags: s.mainTags,
+      secondaryTags: s.secondaryTags,
+      workloadHours: "",
+    });
+  };
+
+  const pickedId = value.appId.match(/\d+/)?.[0] ?? "";
+  const picked = pickedId ? { appId: pickedId, title: value.gameName || `TapTap ${pickedId}`, iconUrl: value.iconUrl } : null;
+
   return (
     <div className="grid gap-3 sm:grid-cols-2">
+      <div className="space-y-1 text-sm sm:col-span-2">
+        <span className="font-medium">Game trên TapTap</span>
+        <TapTapGamePicker
+          selected={picked}
+          onPick={pickGame}
+          onClear={() => onChange({ ...value, appId: "", iconUrl: "" })}
+        />
+        <p className="text-xs text-muted-foreground">
+          Chọn game để tự điền tên, TapTap ID, genre, platform, tag và khối lượng — vẫn sửa tay được bên dưới.
+        </p>
+      </div>
       <label className="space-y-1 text-sm sm:col-span-2">
         <span className="font-medium">Tên game *</span>
         <input className={input} value={value.gameName} onChange={(e) => set("gameName", e.target.value)} />
@@ -94,7 +128,7 @@ export default function CampaignForm({ value, onChange }: { value: CampaignDraft
           className={input}
           value={value.appId}
           placeholder="vd 593829 hoặc taptap.cn/app/593829"
-          onChange={(e) => set("appId", e.target.value)}
+          onChange={(e) => onChange({ ...value, appId: e.target.value, iconUrl: "" })}
         />
       </label>
       <label className="space-y-1 text-sm">

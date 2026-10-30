@@ -1,5 +1,6 @@
 import { Suspense, useState } from "react";
 import { NavLink, Outlet } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
 import { ClipboardList, ExternalLink, FileQuestion, FileSpreadsheet, Gamepad2, Gift, Loader2, Shield, Users } from "lucide-react";
 import PageHeader from "@/components/ui/PageHeader";
 import { useToast } from "@/components/ui/Toast";
@@ -17,15 +18,26 @@ export default function AdminLayout() {
   const toast = useToast();
   const [exporting, setExporting] = useState(false);
   const canTester = hasPermission(user, "tester.manage");
+  const pendingRedemptions = useQuery({
+    queryKey: ["tester-admin-redemptions", "pending"],
+    queryFn: () => testerApi.adminRedemptions("pending"),
+    enabled: canTester,
+    staleTime: 60_000,
+  });
 
-  const tabs = [
+  const tabs: Array<{ to: string; label: string; icon: typeof Users; badge?: number }> = [
     user?.isPanelAdmin
       ? { to: "/admin/users", label: t("Người dùng & phân quyền", "Users & permissions"), icon: Users }
       : { to: "/admin/testers", label: "Testers", icon: Gamepad2 },
     ...(canTester
       ? [
           { to: "/admin/test-campaigns", label: t("Đợt test", "Test campaigns"), icon: ClipboardList },
-          { to: "/admin/tester-benefits", label: t("Benefit tester", "Tester benefits"), icon: Gift },
+          {
+            to: "/admin/tester-benefits",
+            label: t("Benefit tester", "Tester benefits"),
+            icon: Gift,
+            badge: pendingRedemptions.data?.counts.pending,
+          },
           { to: "/admin/tester-survey", label: t("Bảng hỏi tester", "Tester survey"), icon: FileQuestion },
         ]
       : []),
@@ -82,6 +94,11 @@ export default function AdminLayout() {
           >
             <tab.icon className="w-4 h-4" />
             {tab.label}
+            {tab.badge ? (
+              <span className="rounded-full bg-amber-500 px-1.5 text-[11px] font-semibold leading-[18px] text-white tabular-nums">
+                {tab.badge}
+              </span>
+            ) : null}
           </NavLink>
         ))}
       </nav>

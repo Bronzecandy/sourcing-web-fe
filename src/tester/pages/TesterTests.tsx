@@ -71,7 +71,10 @@ function TestList({ title, rows }: { title: string; rows: TesterTest[] }) {
         {rows.map((t, i) => (
           <Reveal key={t.id} delay={(i % 4) * 80} className="rounded-[1.5rem] border border-brand-navy/10 bg-[#fbfaff] p-5">
             <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0">
+              {t.campaign.iconUrl && (
+                <img src={t.campaign.iconUrl} alt="" loading="lazy" className="h-12 w-12 shrink-0 rounded-2xl bg-white object-cover" />
+              )}
+              <div className="min-w-0 flex-1">
                 <p className="tp-display truncate text-xl font-bold text-brand-navy">{t.campaign.gameName}</p>
                 <p className="text-sm text-brand-navy/60">
                   {[t.campaign.genre, t.campaign.platform ? PLATFORM_TEXT[t.campaign.platform] ?? t.campaign.platform : null]

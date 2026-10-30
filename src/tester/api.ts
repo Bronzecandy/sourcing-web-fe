@@ -1,7 +1,9 @@
 import { api } from "@/services/api";
 import type {
+  AdminRedemption,
   AdminTesterDetail,
   AdminTesterRow,
+  CampaignGameOption,
   SurveyAnswers,
   SurveyForm,
   TestCampaign,
@@ -45,6 +47,9 @@ export const testerApi = {
     unwrap<TesterMe>(api.post("/tester/survey", { answers, startedAt, device: navigator.userAgent.includes("Mobile") ? "mobile" : "pc" })),
   tests: () => unwrap<TesterTest[]>(api.get("/tester/tests")),
   benefits: () => unwrap<TesterBenefits>(api.get("/tester/benefits")),
+  redeem: (body: { tier: number; item: number; option?: number; gameAccount: string; note?: string }) =>
+    unwrap<TesterBenefits>(api.post("/tester/benefits/redeem", body)),
+  cancelRedemption: (id: string) => unwrap<TesterBenefits>(api.post(`/tester/benefits/${id}/cancel`, {})),
 
   adminMeta: () => unwrap<TesterAdminMeta>(api.get("/tester/admin/meta")),
   adminTesters: () => unwrap<AdminTesterRow[]>(api.get("/tester/admin/testers")),
@@ -71,9 +76,14 @@ export const testerApi = {
     unwrap<{ id: string }>(api.patch(`/tester/admin/assignments/${assignmentId}`, body)),
   adminRemoveAssignment: (assignmentId: string) =>
     unwrap<{ deleted: boolean }>(api.delete(`/tester/admin/assignments/${assignmentId}`)),
-  adminRedeem: (body: { userId: string; amount: number; item: string; note?: string }) =>
-    unwrap<{ id: string }>(api.post("/tester/admin/benefits", body)),
-  adminDeleteRedemption: (id: string) => unwrap<{ deleted: boolean }>(api.delete(`/tester/admin/benefits/${id}`)),
+  adminTapTapSearch: (q: string) =>
+    unwrap<CampaignGameOption[]>(api.get("/tester/admin/taptap-search", { params: { q } })),
+  adminRedemptions: (status: "pending" | "fulfilled" | "closed" | "all") =>
+    unwrap<{ counts: Record<string, number>; items: AdminRedemption[] }>(
+      api.get("/tester/admin/redemptions", { params: { status } }),
+    ),
+  adminProcessRedemption: (id: string, body: { status: "fulfilled" | "rejected"; adminNote?: string }) =>
+    unwrap<{ id: string; status: string }>(api.patch(`/tester/admin/redemptions/${id}`, body)),
   adminSurveyReport: () =>
     unwrap<{ form: SurveyForm; report: { errors: string[]; warnings: string[]; placeholders: string[] }; responses: number }>(
       api.get("/tester/admin/survey"),

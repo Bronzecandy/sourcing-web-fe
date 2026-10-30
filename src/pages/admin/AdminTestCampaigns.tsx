@@ -78,10 +78,19 @@ export default function AdminTestCampaigns() {
                 {campaigns.data!.map((c) => (
                   <tr key={c.id} className="hover:bg-muted/30 transition-colors">
                     <td className="px-4 py-3">
-                      <Link to={`/admin/test-campaigns/${c.id}`} className="font-medium text-primary hover:underline">
-                        {c.gameName}
-                      </Link>
-                      {c.appId && <p className="text-xs text-muted-foreground">TapTap {c.appId}</p>}
+                      <div className="flex items-center gap-3">
+                        {c.iconUrl ? (
+                          <img src={c.iconUrl} alt="" loading="lazy" className="h-9 w-9 shrink-0 rounded-lg bg-muted object-cover" />
+                        ) : (
+                          <span className="h-9 w-9 shrink-0 rounded-lg bg-muted" />
+                        )}
+                        <div className="min-w-0">
+                          <Link to={`/admin/test-campaigns/${c.id}`} className="font-medium text-primary hover:underline">
+                            {c.gameName}
+                          </Link>
+                          {c.appId && <p className="text-xs text-muted-foreground">TapTap {c.appId}</p>}
+                        </div>
+                      </div>
                     </td>
                     <td className="px-4 py-3 text-xs">
                       {c.mainTags.join(", ") || "—"}
@@ -116,7 +125,7 @@ export default function AdminTestCampaigns() {
         open={open}
         onClose={() => setOpen(false)}
         title="Tạo đợt test"
-        description="Gắn TapTap ID để Radar tự cập nhật tình trạng test nội bộ."
+        description="Chọn game trên TapTap để tự điền thông tin; Radar sẽ tự cập nhật tình trạng test nội bộ."
         footer={
           <ModalFooterActions
             onCancel={() => setOpen(false)}

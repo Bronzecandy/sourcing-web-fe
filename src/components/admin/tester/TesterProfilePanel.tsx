@@ -14,6 +14,13 @@ const CAMPAIGN_STATUS: Record<string, string> = {
   cancelled: "Hủy",
 };
 
+const REDEMPTION_STATUS: Record<string, string> = {
+  pending: "chờ trao",
+  fulfilled: "đã trao",
+  rejected: "từ chối",
+  cancelled: "tester hủy",
+};
+
 function SectionTitle({ children }: { children: string }) {
   return <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">{children}</h3>;
 }
@@ -175,7 +182,10 @@ export default function TesterProfilePanel({ userId }: { userId: string }) {
             <ul className="mt-2 space-y-1 text-xs text-muted-foreground">
               {d.redemptions.map((r) => (
                 <li key={r.id}>
-                  {new Date(r.createdAt).toLocaleDateString("vi-VN")}: {r.item} (−{r.amount})
+                  {new Date(r.createdAt).toLocaleDateString("vi-VN")}: {r.item} (
+                  {r.status === "rejected" || r.status === "cancelled" ? "hoàn" : "−"}
+                  {r.amount}) · {REDEMPTION_STATUS[r.status] ?? r.status}
+                  {r.gameAccount && <> · {r.gameAccount}</>}
                 </li>
               ))}
             </ul>

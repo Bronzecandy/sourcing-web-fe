@@ -53,7 +53,9 @@ export interface TesterStats {
   completedTests: number;
   completedHours: number;
   earnedBenefits: number;
+  /** Đã trao + đang chờ trao. */
   usedBenefits: number;
+  pendingBenefits: number;
   availableBenefits: number;
 }
 
@@ -97,6 +99,7 @@ export interface TesterTest {
     id: string;
     gameName: string;
     appId: number | null;
+    iconUrl?: string | null;
     genre: string | null;
     platform: string | null;
     startDate: string | null;
@@ -110,11 +113,76 @@ export interface BenefitCatalog {
   teamRequests: Array<{ team: string; items: string[] }>;
 }
 
+export type RedemptionStatus = "pending" | "fulfilled" | "rejected" | "cancelled";
+
+export interface BenefitRedemption {
+  id: string;
+  amount: number;
+  item: string;
+  game?: string | null;
+  reward?: string | null;
+  tier?: number | null;
+  gameAccount: string | null;
+  note: string | null;
+  status: RedemptionStatus;
+  adminNote: string | null;
+  createdAt: string;
+  processedAt: string | null;
+}
+
+/** Một tier quà kèm luật đổi; `lockedReason` khác null = chưa đổi được. */
+export interface RedeemTier {
+  index: number;
+  condition: string;
+  cost: number;
+  monthlyLimit: number | null;
+  requirement: { minGamesPerMonth?: number; minHoursPerMonth?: number } | null;
+  usedThisMonth: number;
+  lockedReason: string | null;
+  /** `options` > 1 phần tử = tester chọn 1 phương án khi đổi. */
+  items: Array<{ index: number; game: string; reward: string; options: string[]; pic: string }>;
+}
+
 export interface TesterBenefits {
   stats: TesterStats;
-  redemptions: Array<{ id: string; amount: number; item: string; note: string | null; createdAt: string }>;
-  catalog: BenefitCatalog;
+  /** Hoạt động tháng hiện tại (YYYY-MM). */
+  month: { month: string; games: number; hours: number };
+  tiers: RedeemTier[];
+  teamRequests: BenefitCatalog["teamRequests"];
+  redemptions: BenefitRedemption[];
   benefitHoursPerUnit: number;
+}
+
+export interface AdminRedemption extends BenefitRedemption {
+  userId: string;
+  name: string;
+  email: string;
+  avatarUrl: string | null;
+  processedBy: string | null;
+}
+
+/** Game tìm được trên TapTap khi tạo đợt test. */
+export interface CampaignGameOption {
+  id: number;
+  title: string;
+  titleEn: string | null;
+  iconUrl: string | null;
+  tags: string[];
+  tagsEn: string[];
+  developer: string | null;
+  platforms: string[];
+  console: boolean;
+  rating: string | null;
+  reserveCount: number | null;
+  fansCount: number | null;
+  downloads: number | null;
+  suggestion: {
+    gameName: string;
+    genre: string;
+    platform: "MB" | "PC" | "CS" | null;
+    mainTags: string[];
+    secondaryTags: string[];
+  };
 }
 
 export interface AdminTesterRow {
@@ -143,13 +211,14 @@ export interface AdminTesterDetail extends AdminTesterRow {
   answers: SurveyAnswers | null;
   genreScores: Array<TesterGenreScore & { rawText: string; source: string; matchedGames: string[] }>;
   assignments: TesterTest[];
-  redemptions: TesterBenefits["redemptions"];
+  redemptions: BenefitRedemption[];
 }
 
 export interface TestCampaign {
   id: string;
   gameName: string;
   appId: number | null;
+  iconUrl?: string | null;
   genre: string | null;
   platform: string | null;
   mainTags: string[];
