@@ -10,6 +10,23 @@ export function actionFill(action: string): string {
   return "transparent";
 }
 
+/** Thứ tự trình bày: theo mức potential, trong cùng mức Test Viable trước Monitor. */
+export const PRIORITY_ORDER = [
+  "Test Viable - High Potential",
+  "Monitor - High Potential",
+  "Test Viable - Medium Potential",
+  "Monitor - Mid Potential",
+  "Test Viable - Low Potential",
+  "Monitor - Low Potential",
+  "Temporary Ignore",
+  "Drop",
+];
+
+export function priorityRank(action: string): number {
+  const i = PRIORITY_ORDER.indexOf(action);
+  return i === -1 ? PRIORITY_ORDER.length : i;
+}
+
 export function displayName(row: { title: string; titleEn?: string }): string {
   return row.titleEn ? `${row.title} (${row.titleEn})` : row.title;
 }

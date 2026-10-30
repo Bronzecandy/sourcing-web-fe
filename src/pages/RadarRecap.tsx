@@ -9,12 +9,13 @@ import {
   fetchRadarRuns,
   runRadarNow,
 } from "@/services/api";
-import type { RadarBullet, RadarRecapRow } from "@/types";
+import type { RadarDigest, RadarRecapRow } from "@/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { cn } from "@/lib/utils";
-import { actionFill, displayName } from "@/lib/radar";
+import { actionFill, displayName, priorityRank } from "@/lib/radar";
 import RadarHistory from "@/components/radar/RadarHistory";
 import LegacyRecapView from "@/components/radar/LegacyRecapView";
+import RadarExecutiveSummary from "@/components/radar/RadarExecutiveSummary";
 
 const BOARDS = [
   { id: "reserve_growth", title: "Top 20 Reserve - Growth", actionHeader: "Next Action" },
@@ -32,19 +33,8 @@ const LABEL_DEFINITIONS = [
   "Drop: Game có barrier rõ ràng (chủ đề nhạy cảm, gameplay niche hoặc không phù hợp với thị trường), khó có cơ hội phát hành thành công.",
 ];
 
-function actionRank(action: string): number {
-  const order = [
-    "Test Viable - High Potential",
-    "Test Viable - Medium Potential",
-    "Test Viable - Low Potential",
-    "Monitor - High Potential",
-    "Monitor - Mid Potential",
-    "Monitor - Low Potential",
-    "Temporary Ignore",
-    "Drop",
-  ];
-  const i = order.indexOf(action);
-  return i === -1 ? order.length : i;
+function byPriority(a: RadarRecapRow, b: RadarRecapRow): number {
+  return priorityRank(a.nextAction) - priorityRank(b.nextAction) || b.score - a.score;
 }
 
 function needsScreening(action: string): boolean {
@@ -86,13 +76,6 @@ function uniqueByScore(rows: RadarRecapRow[]): RadarRecapRow[] {
   return [...byApp.values()];
 }
 
-function isUpcoming(row: RadarRecapRow, today: string): boolean {
-  if (!row.nextAction.startsWith("Monitor")) return false;
-  const s = row.schedule;
-  if (!s) return Boolean(row.releaseLabel);
-  return Boolean(s.date && s.date > today && ["launch_date", "closed_beta", "test_recruit"].includes(s.kind ?? ""));
-}
-
 function hasAlert(row: RadarRecapRow): boolean {
   return Boolean(row.firstInRecap) || (row.toolAdjustments ?? "").includes("ALERT");
 }
@@ -111,18 +94,16 @@ export default function RadarRecap() {
   const [copied, setCopied] = useState(false);
   const [busy, setBusy] = useState<"docx" | "xlsx" | "run" | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  const [boardSort, setBoardSort] = useState<"priority" | "rank">("priority");
 
   const rows = data?.rows ?? [];
   const unique = useMemo(() => uniqueByScore(rows), [rows]);
-  const today = data?.date ?? "";
-  const playable = unique.filter((r) => r.nextAction.startsWith("Test Viable")).sort((a, b) => b.score - a.score);
-  const upcoming = unique.filter((r) => isUpcoming(r, today)).sort((a, b) => b.score - a.score);
-  const overview = unique
-    .filter((r) => needsScreening(r.nextAction))
-    .sort((a, b) => actionRank(a.nextAction) - actionRank(b.nextAction) || b.score - a.score);
+  const overview = unique.filter((r) => needsScreening(r.nextAction)).sort(byPriority);
   const legacy = data?.status === "imported";
   const summary = !legacy ? (data?.summary ?? null) : null;
-  const countKeys = summary?.counts[0] ? Object.keys(summary.counts[0].counts) : [];
+  const digest = summary?.digest ?? null;
+  const mentioned = new Set((digest?.groups ?? []).flatMap((g) => g.lines.map((l) => l.appId)));
+  const carryOver = (summary?.carryOver ?? []).filter((c) => !mentioned.has(c.appId));
   const runInfo = (runs.data ?? []).find((r) => r.date === data?.date);
   const canDownload = Boolean(data && (summary || legacy));
   const hasDocx = runInfo ? runInfo.hasDocx : Boolean(summary);
@@ -236,74 +217,51 @@ export default function RadarRecap() {
 
       {legacy && data && <LegacyRecapView data={data} />}
 
-      {summary && (
+      {summary && !digest && <p className="text-sm text-muted-foreground">Kỳ này chưa có Executive Summary.</p>}
+
+      {summary && digest && data && (
         <>
+          <RadarExecutiveSummary
+            digest={digest}
+            periodCode={data.periodCode}
+            dateLabel={summary.dateLabel}
+            previousPeriodCode={summary.previousPeriodCode}
+          />
+
           <section className="space-y-3">
-            <h2 className="text-lg font-semibold">1. Overview</h2>
-            <div className="rounded-lg border border-border bg-card p-4 text-sm space-y-2">
-              <p className="font-semibold">Số liệu nhanh:</p>
-              {(summary.testingThisWeek ?? []).length > 0 && (
-                <>
-                  <p className="font-medium">Game đang test trong tuần:</p>
-                  <ul className="list-[circle] pl-6 space-y-1">
-                    {summary.testingThisWeek!.map((t) => (
-                      <li key={t}>{t}</li>
-                    ))}
-                  </ul>
-                </>
-              )}
-              <p className="font-medium">Game hiện có thể test:</p>
-              {summary.testableNow.length === 0 ? (
-                <p className="pl-6 text-muted-foreground">Không có game nào đang mở test/đã ra mắt tại thời điểm chốt kỳ.</p>
-              ) : (
-                <ul className="list-[circle] pl-6 space-y-1">
-                  {summary.testableNow.map((item) => (
-                    <li key={item}>{item.split("\n")[0]}</li>
-                  ))}
-                </ul>
-              )}
-              <p>
-                <span className="font-medium">Game Monitor chưa có thời gian:</span> {summary.monitorNoDateCount}
+            <div>
+              <h2 className="text-lg font-semibold">2. Game Overview — High Potential</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Test Viable - High trước, rồi Monitor - High; trong mỗi nhóm xếp theo điểm Potential.
               </p>
             </div>
+            <HighlightCards cards={digest.cards} rows={unique} />
+          </section>
 
+          <section className="space-y-3">
+            <h2 className="text-lg font-semibold">3. Tổng quan kỳ</h2>
             <h3 className="text-sm font-semibold">Bảng đếm số lượng game theo Next Action</h3>
-            <div className="overflow-x-auto rounded-lg border border-border">
-              <table className="w-full text-sm">
-                <thead className="bg-[#D9D9D9] text-foreground">
-                  <tr>
-                    <th className="px-3 py-2 text-left font-semibold">Bảng</th>
-                    {countKeys.map((key) => (
-                      <th key={key} className="px-3 py-2 text-right font-semibold whitespace-nowrap">
-                        {key}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {summary.counts.map((row, i) => (
-                    <tr
-                      key={row.label}
-                      className={cn("border-t border-border", i === summary.counts.length - 1 && "bg-[#EDEDED] font-semibold")}
-                    >
-                      <td className="px-3 py-2">{row.label}</td>
-                      {countKeys.map((key) => (
-                        <td key={key} className="px-3 py-2 text-right tabular-nums">
-                          {row.counts[key] ?? 0}
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-
-            <h3 className="text-sm font-semibold">Bảng tổng quan — toàn bộ game đang ở Test Viable / Monitor trong kỳ</h3>
+            <CountTable counts={digest.counts} />
+            <h3 className="text-sm font-semibold">Bảng tổng quan — game Test Viable / Monitor, xếp theo mức ưu tiên</h3>
             <OverviewTable rows={overview} />
-
+            {carryOver.length > 0 && (
+              <div className="space-y-2 rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm">
+                <p className="font-semibold">Test Viable kỳ trước đã rời Top 20 (không đưa vào report)</p>
+                <ul className="list-disc space-y-1 pl-5">
+                  {carryOver.map((c) => (
+                    <li key={c.appId}>
+                      <a href={c.overviewUrl} className="font-medium text-primary hover:underline">
+                        {displayName(c)}
+                      </a>{" "}
+                      — {c.nextAction} (kỳ {c.previousDate})
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
             <details className="rounded-lg border border-border bg-card p-4 text-sm">
               <summary className="cursor-pointer font-medium">Định nghĩa các nhãn</summary>
-              <ul className="mt-2 list-disc pl-5 space-y-1">
+              <ul className="mt-2 list-disc space-y-1 pl-5">
                 {LABEL_DEFINITIONS.map((d) => (
                   <li key={d}>{d}</li>
                 ))}
@@ -311,82 +269,48 @@ export default function RadarRecap() {
             </details>
           </section>
 
-          <section className="space-y-3">
-            <h2 className="text-lg font-semibold">2. Game Overview</h2>
-            <p className="text-sm text-muted-foreground">
-              Chỉ hiển thị game hiện chơi/test được hoặc đã có ngày test/ra mắt cụ thể:
-            </p>
-            <GameCards title="Game hiện có thể test:" rows={playable} />
-            <GameCards title="Game sắp có thể test:" rows={upcoming} />
-          </section>
-
-          <section className="space-y-3">
-            <h2 className="text-lg font-semibold">3. Executive Summary</h2>
-            {summary.section3 ? (
-              <div className="rounded-lg border border-border bg-card p-4 space-y-4 text-sm leading-6">
-                <div>
-                  <h3 className="font-semibold">Biến động đáng chú ý trong tuần:</h3>
-                  <p className="mt-2 font-medium">Mới xuất hiện:</p>
-                  <BulletList items={summary.section3.newEntries} empty="Không có game mới cần Monitor trong kỳ này." />
-                  <p className="mt-2 font-medium">Cập nhật lịch trình mới:</p>
-                  <BulletList items={summary.section3.scheduleUpdates} empty="Không có lịch ra mắt/test mới trong kỳ này." />
-                </div>
-                <div>
-                  <h3 className="font-semibold">Game có thể test:</h3>
-                  <BulletList items={summary.section3.testable} empty="Không có game nào ở mức Test Viable trong kỳ này." />
-                </div>
-                <div>
-                  <h3 className="font-semibold">Thông tin game thị trường mới</h3>
-                  {summary.section3.market.length === 0 && (
-                    <p className="text-muted-foreground">Không có game của NPH lớn trong kỳ này.</p>
-                  )}
-                  {summary.section3.market.map((block) => (
-                    <div key={block.publisher} className="mt-2">
-                      <p className="font-semibold">{block.publisher}</p>
-                      <BulletList items={block.items} empty="" />
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : (
-              <div className="rounded-lg border border-border bg-card p-4 space-y-3 text-sm leading-6">
-                {summary.executiveParagraphs.map((paragraph) => (
-                  <p key={paragraph.slice(0, 48)}>{paragraph}</p>
-                ))}
-              </div>
-            )}
-          </section>
-
-          {(summary.carryOver ?? []).length > 0 && (
-            <section className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm space-y-2">
-              <h2 className="font-semibold">Test Viable kỳ trước đã rời Top 20 (không đưa vào report)</h2>
-              <ul className="list-disc pl-5 space-y-1">
-                {summary.carryOver!.map((c) => (
-                  <li key={c.appId}>
-                    <a href={c.overviewUrl} className="font-medium text-primary hover:underline">
-                      {displayName(c)}
-                    </a>{" "}
-                    — {c.nextAction} (kỳ {c.previousDate})
-                  </li>
-                ))}
-              </ul>
-            </section>
-          )}
-
           <section className="space-y-6">
-            <div>
-              <h2 className="text-lg font-semibold">Game Radar Recap</h2>
-              <p className="text-sm text-muted-foreground mt-1">
-                Đúng 3 sheet của file Excel: Reserve Growth, Reserve Scale, New Launch (game ra mắt trong 60 ngày).
-              </p>
+            <div className="flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <h2 className="text-lg font-semibold">4. Game Radar Recap</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  3 bảng giống 3 sheet của file Excel: Reserve Growth, Reserve Scale, New Launch (game ra mắt trong 60 ngày).
+                </p>
+              </div>
+              <div className="flex rounded-lg border border-border p-1 text-sm">
+                {(
+                  [
+                    ["priority", "Theo mức ưu tiên"],
+                    ["rank", "Theo hạng"],
+                  ] as const
+                ).map(([key, label]) => (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setBoardSort(key)}
+                    className={cn(
+                      "rounded-md px-3 py-1.5 transition-colors",
+                      boardSort === key ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted",
+                    )}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
             </div>
             {BOARDS.map((board) => (
               <BoardTable
                 key={board.id}
-                title={`${board.title} (${data?.periodCode})`}
+                title={`${board.title} (${data.periodCode})`}
                 launch={board.id === "new_launch"}
                 actionHeader={board.actionHeader}
-                rows={rows.filter((row) => row.board === board.id).sort((a, b) => a.rank - b.rank)}
+                rows={rows
+                  .filter((row) => row.board === board.id)
+                  .sort(
+                    (a, b) =>
+                      (boardSort === "priority" ? priorityRank(a.nextAction) - priorityRank(b.nextAction) : 0) ||
+                      a.rank - b.rank,
+                  )}
               />
             ))}
           </section>
@@ -404,20 +328,72 @@ function GameLink({ row }: { row: { title: string; titleEn?: string; overviewUrl
   );
 }
 
-function BulletList({ items, empty }: { items: RadarBullet[]; empty: string }) {
-  if (items.length === 0) return empty ? <p className="pl-5 text-muted-foreground">{empty}</p> : null;
+const COUNT_GROUPS = [
+  { label: "High Potential", actions: ["Test Viable - High Potential", "Monitor - High Potential"] },
+  { label: "Mid / Medium", actions: ["Test Viable - Medium Potential", "Monitor - Mid Potential"] },
+  { label: "Low", actions: ["Test Viable - Low Potential", "Monitor - Low Potential"] },
+];
+
+function CountTable({ counts }: { counts: RadarDigest["counts"] }) {
+  const grouped = COUNT_GROUPS.flatMap((g) => g.actions);
+  const single = counts.columns.filter((a) => !grouped.includes(a));
+  const columns = [...grouped, ...single];
   return (
-    <ul className="list-disc pl-5 space-y-1">
-      {items.map((b) => (
-        <li key={`${b.appId}-${b.text.slice(0, 20)}`}>
-          {b.isNew && <span className="font-semibold">MỚI — </span>}
-          <a href={b.overviewUrl} className="font-semibold text-primary underline-offset-2 hover:underline">
-            {b.nameEn ? `${b.nameCn} (${b.nameEn})` : b.nameCn}
-          </a>
-          <span className={cn(b.repeat && "text-muted-foreground")}>{b.text}</span>
-        </li>
-      ))}
-    </ul>
+    <div className="overflow-x-auto rounded-lg border border-border">
+      <table className="w-full text-sm">
+        <thead className="bg-[#D9D9D9]">
+          <tr>
+            <th rowSpan={2} className="px-3 py-2 text-left font-semibold">
+              Bảng
+            </th>
+            {COUNT_GROUPS.map((g) => (
+              <th key={g.label} colSpan={2} className="border-l border-border px-3 py-1.5 text-center font-semibold">
+                {g.label}
+              </th>
+            ))}
+            {single.map((a) => (
+              <th
+                key={a}
+                rowSpan={2}
+                className="whitespace-nowrap border-l border-border px-3 py-2 text-right font-semibold"
+                style={{ backgroundColor: actionFill(a) }}
+              >
+                {a === "Temporary Ignore" ? "Temp. Ignore" : a}
+              </th>
+            ))}
+          </tr>
+          <tr>
+            {grouped.map((a) => (
+              <th
+                key={a}
+                className="whitespace-nowrap border-l border-border px-3 py-1.5 text-right text-xs font-semibold"
+                style={{ backgroundColor: actionFill(a) }}
+              >
+                {a.startsWith("Test Viable") ? "Test Viable" : "Monitor"}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {counts.rows.map((row, i) => (
+            <tr
+              key={row.label}
+              className={cn("border-t border-border", i === counts.rows.length - 1 && "bg-[#EDEDED] font-semibold")}
+            >
+              <td className="whitespace-nowrap px-3 py-2">{row.label}</td>
+              {columns.map((a) => (
+                <td
+                  key={a}
+                  className={cn("border-l border-border px-3 py-2 text-right tabular-nums", !row.counts[a] && "text-muted-foreground")}
+                >
+                  {row.counts[a] ?? 0}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -431,7 +407,9 @@ function OverviewTable({ rows }: { rows: RadarRecapRow[] }) {
         <thead className="bg-[#D9D9D9]">
           <tr>
             <th className="px-3 py-2 text-left font-semibold">Tên game</th>
-            <th className="px-3 py-2 text-left font-semibold whitespace-nowrap">Next Action</th>
+            <th className="whitespace-nowrap px-3 py-2 text-left font-semibold">Next Action</th>
+            <th className="px-3 py-2 text-right font-semibold">Điểm</th>
+            <th className="whitespace-nowrap px-3 py-2 text-left font-semibold">Lịch phát hành</th>
           </tr>
         </thead>
         <tbody>
@@ -440,9 +418,11 @@ function OverviewTable({ rows }: { rows: RadarRecapRow[] }) {
               <td className="px-3 py-2">
                 <GameLink row={row} />
               </td>
-              <td className="px-3 py-2 whitespace-nowrap" style={{ backgroundColor: actionFill(row.nextAction) }}>
+              <td className="whitespace-nowrap px-3 py-2" style={{ backgroundColor: actionFill(row.nextAction) }}>
                 {row.nextAction}
               </td>
+              <td className="px-3 py-2 text-right tabular-nums">{row.score.toFixed(1)}</td>
+              <td className="px-3 py-2">{row.releaseLabel || "—"}</td>
             </tr>
           ))}
         </tbody>
@@ -451,59 +431,81 @@ function OverviewTable({ rows }: { rows: RadarRecapRow[] }) {
   );
 }
 
-function GameCards({ title, rows }: { title: string; rows: RadarRecapRow[] }) {
+function HighlightCards({ cards, rows }: { cards: RadarDigest["cards"]; rows: RadarRecapRow[] }) {
+  const byApp = new Map(rows.map((r) => [r.appId, r]));
+  const list = cards.flatMap((card) => {
+    const row = byApp.get(card.appId);
+    return row ? [{ card, row }] : [];
+  });
+  if (list.length === 0) return <p className="text-sm text-muted-foreground">Kỳ này không có game High Potential.</p>;
   return (
-    <div className="space-y-3">
-      <h3 className="text-sm font-semibold">{title}</h3>
-      {rows.length === 0 ? (
-        <p className="text-sm text-muted-foreground">Không có</p>
-      ) : (
-        <div className="grid gap-3 lg:grid-cols-2">
-          {rows.map((row) => (
-            <div key={row.appId} className="rounded-lg border border-border bg-card p-4 text-sm">
-              <GameLink row={row} />
-              <dl className="mt-3 grid grid-cols-[9rem_1fr] gap-x-3 gap-y-1.5">
-                <Field label="Điểm Potential">{row.score.toFixed(1)}</Field>
-                <Field label="AI Screening">
-                  {row.screeningUrl ? (
-                    <a href={row.screeningUrl} className="text-primary hover:underline">
-                      {screeningText(row)}
-                    </a>
-                  ) : (
-                    screeningText(row)
-                  )}
-                </Field>
-                <Field label="Genre">{row.genre || "—"}</Field>
-                <Field label="Nhà phát hành">
-                  <span className="font-semibold">{row.publisher || "—"}</span>
-                </Field>
-                <Field label="Lịch phát hành">{row.releaseLabel || "—"}</Field>
-                <Field label="Status">{row.nextAction}</Field>
-                <Field label="Lý do">{row.reason || "—"}</Field>
-                <Field label="Video gameplay">
-                  {row.videoUrl ? (
-                    <a href={row.videoUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline">
-                      TapTap video
-                    </a>
-                  ) : (
-                    "Chưa tìm thấy"
-                  )}
-                </Field>
-                <Field label="Link TapTap">
-                  <a
-                    href={`https://www.taptap.cn/app/${row.appId}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-primary hover:underline"
-                  >
-                    taptap.cn/app/{row.appId}
-                  </a>
-                </Field>
-              </dl>
+    <div className="grid gap-3 lg:grid-cols-2">
+      {list.map(({ card, row }) => (
+        <div
+          key={row.appId}
+          id={`radar-game-${row.appId}`}
+          className="scroll-mt-24 rounded-lg border border-border bg-card p-4 text-sm target:ring-2 target:ring-primary/40"
+        >
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <GameLink row={row} />
+            <span
+              className="whitespace-nowrap rounded px-1.5 py-0.5 text-xs"
+              style={{ backgroundColor: actionFill(row.nextAction) }}
+            >
+              {row.nextAction}
+            </span>
+          </div>
+          {card.badges.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {card.badges.map((b) => (
+                <span key={b} className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800">
+                  {b}
+                </span>
+              ))}
             </div>
-          ))}
+          )}
+          <dl className="mt-3 grid grid-cols-[9rem_1fr] gap-x-3 gap-y-1.5">
+            <Field label="Bảng">{card.boards}</Field>
+            <Field label="Điểm Potential">{row.score.toFixed(1)}</Field>
+            <Field label="AI Screening">
+              {row.screeningUrl ? (
+                <a href={row.screeningUrl} className="text-primary hover:underline">
+                  {screeningText(row)}
+                </a>
+              ) : (
+                screeningText(row)
+              )}
+            </Field>
+            <Field label="Quy mô">{scaleText(row)}</Field>
+            <Field label="Genre">{row.genre || "—"}</Field>
+            <Field label="Nhà phát hành">
+              <span className="font-semibold">{row.publisher || "—"}</span>
+            </Field>
+            <Field label="Lịch phát hành">{row.releaseLabel || "—"}</Field>
+            <Field label="Test nội bộ">{row.internalTest?.label || "Chưa lên plan"}</Field>
+            {row.reason && !(row.genre && row.reason.includes(row.genre)) && <Field label="Lý do">{row.reason}</Field>}
+            <Field label="Video gameplay">
+              {row.videoUrl ? (
+                <a href={row.videoUrl} target="_blank" rel="noreferrer" className="text-primary hover:underline">
+                  TapTap video
+                </a>
+              ) : (
+                "Chưa tìm thấy"
+              )}
+            </Field>
+            <Field label="Link TapTap">
+              <a
+                href={`https://www.taptap.cn/app/${row.appId}`}
+                target="_blank"
+                rel="noreferrer"
+                className="text-primary hover:underline"
+              >
+                taptap.cn/app/{row.appId}
+              </a>
+            </Field>
+          </dl>
         </div>
-      )}
+      ))}
     </div>
   );
 }

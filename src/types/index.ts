@@ -710,10 +710,41 @@ export interface RadarSection3 {
   market: Array<{ publisher: string; items: RadarBullet[] }>;
 }
 
+export interface RadarDigestLine {
+  appId: number;
+  name: string;
+  url: string;
+  /** Rỗng khi dòng tự nêu thay đổi nhãn (vd rời nhóm High). */
+  nextAction: string;
+  note: string;
+  publisher: string | null;
+  /** Có thẻ ở mục Game Overview. */
+  card: boolean;
+}
+
+export interface RadarDigestGroup {
+  key: string;
+  title: string;
+  lines: RadarDigestLine[];
+  empty?: string;
+}
+
+/** Executive Summary trên web: High Potential + Mid/Medium có biến động, mỗi game một lần. */
+export interface RadarDigest {
+  stats: Array<{ key: string; label: string; value: number }>;
+  internalTests: string[];
+  groups: RadarDigestGroup[];
+  quiet: RadarDigestLine[];
+  others: string | null;
+  cards: Array<{ appId: number; badges: string[]; boards: string }>;
+  counts: { columns: string[]; rows: Array<{ label: string; counts: Record<string, number> }> };
+}
+
 export interface RadarRecapSummary {
   periodCode: string;
   dateLabel: string;
   copyText: string;
+  digest?: RadarDigest;
   executiveParagraphs: string[];
   testableNow: string[];
   upcoming: string[];
@@ -803,6 +834,8 @@ export interface RadarRunListItem {
   weekEnd: string;
   games: number;
   actions: { testViable: number; monitor: number; ignore: number; drop: number; other: number };
+  highPotential?: number;
+  /** Game High/Mid mới vào radar / có lịch mới. */
   newGames: number;
   scheduleUpdates: number;
   hasDocx: boolean;

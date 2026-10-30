@@ -107,7 +107,8 @@ export default function RadarHistory({
                   </span>
                   {w.main.source === "tool" && (
                     <span className="mt-1.5 block text-muted-foreground">
-                      {w.main.newGames} game mới · {w.main.scheduleUpdates} lịch mới
+                      {w.main.highPotential ?? 0} High Potential · {w.main.newGames} mới · {w.main.scheduleUpdates} lịch mới
+                      (High/Mid)
                     </span>
                   )}
                 </button>
