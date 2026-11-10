@@ -5,14 +5,18 @@ import { useToast } from "@/components/ui/Toast";
 import { cn } from "@/lib/utils";
 import { btnGhost } from "@/lib/button-classes";
 import { testerApi } from "@/tester/api";
+import { testGameAdminApi } from "@/testgame/api";
+import { ASSIGNMENT_STATUS_LABEL, CAMPAIGN_STATUS_LABEL, REVIEW_STATUS_LABEL, TESTER_TYPE_LABEL } from "@/testgame/labels";
+import type { AssignmentStatus, CampaignStatus, ReviewStatus } from "@/testgame/types";
 import { ScoringBadge } from "./TesterRosterTable";
 
-const CAMPAIGN_STATUS: Record<string, string> = {
-  planned: "Lên plan",
-  running: "Đang test",
-  done: "Đã test xong",
-  cancelled: "Hủy",
-};
+function assignmentLabel(a: { status?: string; reviewStatus?: ReviewStatus | null; completed: boolean; campaign: { status: string } }): string {
+  if (a.completed) return "Hoàn thành";
+  if (a.status === "submitted" && a.reviewStatus) return REVIEW_STATUS_LABEL[a.reviewStatus];
+  if (a.campaign.status === "cancelled") return CAMPAIGN_STATUS_LABEL.cancelled;
+  if (a.status) return ASSIGNMENT_STATUS_LABEL[a.status as AssignmentStatus] ?? a.status;
+  return CAMPAIGN_STATUS_LABEL[a.campaign.status as CampaignStatus] ?? a.campaign.status;
+}
 
 const REDEMPTION_STATUS: Record<string, string> = {
   pending: "chờ trao",
@@ -58,6 +62,16 @@ export default function TesterProfilePanel({ userId }: { userId: string }) {
     try {
       await testerApi.adminUpdateTester(d.userId, { active: !d.active });
       toast.success(d.active ? "Đã tạm ngưng tester" : "Đã kích hoạt lại tester");
+      refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Không cập nhật được");
+    }
+  };
+
+  const setType = async (testerType: string) => {
+    try {
+      await testGameAdminApi.setTesterType(userId, testerType || null);
+      toast.success("Đã đổi loại tester");
       refresh();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Không cập nhật được");
@@ -110,6 +124,20 @@ export default function TesterProfilePanel({ userId }: { userId: string }) {
         <Info label="Giờ chơi / tuần" value={d.weeklyPlayLabel} />
         <Info label="Có thể test" value={d.testTimeLabel} />
         <Info label="Chi tiêu" value={d.payTier} />
+        <label className="block">
+          <span className="text-xs text-muted-foreground">Loại tester (mức bảo mật được mời)</span>
+          <select
+            value={d.testerType ?? "staff"}
+            onChange={(e) => void setType(e.target.value)}
+            className="mt-0.5 w-full rounded-md border border-border bg-background px-2 py-1 text-sm font-medium"
+          >
+            {Object.entries(TESTER_TYPE_LABEL).map(([k, label]) => (
+              <option key={k} value={k}>
+                {label}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
 
       <section>
@@ -146,9 +174,9 @@ export default function TesterProfilePanel({ userId }: { userId: string }) {
 
       <div className="grid gap-6 sm:grid-cols-2">
         <section>
-          <SectionTitle>Đợt test</SectionTitle>
+          <SectionTitle>Game test</SectionTitle>
           {d.assignments.length === 0 ? (
-            <p className="text-muted-foreground">Chưa được gán.</p>
+            <p className="text-muted-foreground">Chưa được mời.</p>
           ) : (
             <ul className="divide-y divide-border rounded-lg border border-border">
               {d.assignments.map((a) => (
@@ -157,7 +185,7 @@ export default function TesterProfilePanel({ userId }: { userId: string }) {
                     {a.campaign.gameName}
                   </Link>
                   <span className="shrink-0 text-xs text-muted-foreground">
-                    {a.workloadHours} giờ · {a.completed ? "Hoàn thành" : CAMPAIGN_STATUS[a.campaign.status] ?? a.campaign.status}
+                    {a.workloadHours} giờ · {assignmentLabel(a)}
                   </span>
                 </li>
               ))}

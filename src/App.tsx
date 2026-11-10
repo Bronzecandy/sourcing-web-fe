@@ -26,8 +26,11 @@ const Waiting = lazy(() => import("./pages/Waiting"));
 const AdminLayout = lazy(() => import("./pages/admin/AdminLayout"));
 const AdminUsers = lazy(() => import("./pages/AdminUsers"));
 const AdminTesters = lazy(() => import("./pages/admin/AdminTesters"));
-const AdminTestCampaigns = lazy(() => import("./pages/admin/AdminTestCampaigns"));
-const AdminTestCampaignDetail = lazy(() => import("./pages/admin/AdminTestCampaignDetail"));
+const TestGameList = lazy(() => import("./testgame/admin/TestGameList"));
+const TestGameDetail = lazy(() => import("./testgame/admin/TestGameDetail"));
+const TestGameTemplates = lazy(() => import("./testgame/admin/TemplatesPage"));
+const TestGameSettings = lazy(() => import("./testgame/admin/SettingsPage"));
+const SharedTestReport = lazy(() => import("./testgame/share/SharedTestReport"));
 const AdminTesterBenefits = lazy(() => import("./pages/admin/AdminTesterBenefits"));
 const AdminTesterSurvey = lazy(() => import("./pages/admin/AdminTesterSurvey"));
 const Distribution = lazy(() => import("./pages/Distribution"));
@@ -37,7 +40,9 @@ const TesterShell = lazy(() => import("./tester/TesterShell"));
 const TesterLanding = lazy(() => import("./tester/pages/TesterLanding"));
 const TesterProfile = lazy(() => import("./tester/pages/TesterProfile"));
 const TesterSurvey = lazy(() => import("./tester/pages/TesterSurvey"));
-const TesterTests = lazy(() => import("./tester/pages/TesterTests"));
+const TesterTestGames = lazy(() => import("./testgame/tester/TesterTestGames"));
+const TesterTestGame = lazy(() => import("./testgame/tester/TesterTestGame"));
+const TesterTestSurvey = lazy(() => import("./testgame/tester/TesterTestSurvey"));
 const TesterBenefits = lazy(() => import("./tester/pages/TesterBenefits"));
 
 function PageLoader() {
@@ -95,11 +100,14 @@ export default function App() {
                 <Route element={<TesterAuthRoute />}>
                   <Route path="profile" element={<TesterProfile />} />
                   <Route path="survey" element={<TesterSurvey />} />
-                  <Route path="tests" element={<TesterTests />} />
+                  <Route path="tests" element={<TesterTestGames />} />
+                  <Route path="tests/:id" element={<TesterTestGame />} />
+                  <Route path="tests/:id/survey" element={<TesterTestSurvey />} />
                   <Route path="benefits" element={<TesterBenefits />} />
                 </Route>
                 <Route path="*" element={<Navigate to="/tester" replace />} />
               </Route>
+              <Route path="/share/test-report/:key" element={<SharedTestReport />} />
               <Route element={<ProtectedAppRoute />}>
                 <Route element={<Layout />}>
                   <Route path="/" element={<Dashboard />} />
@@ -119,8 +127,10 @@ export default function App() {
                     <Route index element={<Navigate to="/admin/users" replace />} />
                     <Route path="users" element={<AdminUsers />} />
                     <Route path="testers" element={<AdminTesters />} />
-                    <Route path="test-campaigns" element={<AdminTestCampaigns />} />
-                    <Route path="test-campaigns/:id" element={<AdminTestCampaignDetail />} />
+                    <Route path="test-campaigns" element={<TestGameList />} />
+                    <Route path="test-campaigns/:id" element={<TestGameDetail />} />
+                    <Route path="test-templates" element={<TestGameTemplates />} />
+                    <Route path="test-settings" element={<TestGameSettings />} />
                     <Route path="tester-benefits" element={<AdminTesterBenefits />} />
                     <Route path="tester-survey" element={<AdminTesterSurvey />} />
                   </Route>

@@ -6,14 +6,10 @@ import type {
   CampaignGameOption,
   SurveyAnswers,
   SurveyForm,
-  TestCampaign,
-  TestCampaignDetail,
   TesterAdminMeta,
   TesterBenefits,
   TesterMe,
   TesterPublicInfo,
-  TesterRecommendation,
-  TesterTest,
 } from "./types";
 
 type Envelope<T> = { success: boolean; data?: T; error?: string; issues?: string[] };
@@ -45,7 +41,6 @@ export const testerApi = {
   survey: () => unwrap<SurveyForm>(api.get("/tester/survey")),
   submitSurvey: (answers: SurveyAnswers, startedAt: string) =>
     unwrap<TesterMe>(api.post("/tester/survey", { answers, startedAt, device: navigator.userAgent.includes("Mobile") ? "mobile" : "pc" })),
-  tests: () => unwrap<TesterTest[]>(api.get("/tester/tests")),
   benefits: () => unwrap<TesterBenefits>(api.get("/tester/benefits")),
   redeem: (body: { tier: number; item: number; option?: number; gameAccount: string; note?: string }) =>
     unwrap<TesterBenefits>(api.post("/tester/benefits/redeem", body)),
@@ -57,25 +52,6 @@ export const testerApi = {
   adminUpdateTester: (userId: string, body: { active?: boolean }) =>
     unwrap<AdminTesterRow>(api.patch(`/tester/admin/testers/${userId}`, body)),
   adminRescore: (userId: string) => unwrap<{ queued: boolean }>(api.post(`/tester/admin/testers/${userId}/rescore`, {})),
-  adminCampaigns: () => unwrap<TestCampaign[]>(api.get("/tester/admin/campaigns")),
-  adminCampaign: (id: string) => unwrap<TestCampaignDetail>(api.get(`/tester/admin/campaigns/${id}`)),
-  adminSaveCampaign: (body: Partial<TestCampaign> & { id?: string }) =>
-    body.id
-      ? unwrap<TestCampaign>(api.patch(`/tester/admin/campaigns/${body.id}`, body))
-      : unwrap<TestCampaign>(api.post("/tester/admin/campaigns", body)),
-  adminDeleteCampaign: (id: string) => unwrap<{ deleted: boolean }>(api.delete(`/tester/admin/campaigns/${id}`)),
-  adminRecommend: (id: string, opts: { limit?: number; platformFilter?: boolean } = {}) =>
-    unwrap<TesterRecommendation[]>(
-      api.get(`/tester/admin/campaigns/${id}/recommend`, {
-        params: { limit: opts.limit ?? 7, platform: opts.platformFilter === false ? "0" : "1" },
-      }),
-    ),
-  adminAssign: (id: string, userIds: string[]) =>
-    unwrap<TestCampaignDetail>(api.post(`/tester/admin/campaigns/${id}/assignments`, { userIds })),
-  adminUpdateAssignment: (assignmentId: string, body: { completed?: boolean; workloadHours?: number | null }) =>
-    unwrap<{ id: string }>(api.patch(`/tester/admin/assignments/${assignmentId}`, body)),
-  adminRemoveAssignment: (assignmentId: string) =>
-    unwrap<{ deleted: boolean }>(api.delete(`/tester/admin/assignments/${assignmentId}`)),
   adminTapTapSearch: (q: string) =>
     unwrap<CampaignGameOption[]>(api.get("/tester/admin/taptap-search", { params: { q } })),
   adminRedemptions: (status: "pending" | "fulfilled" | "closed" | "all") =>

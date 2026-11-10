@@ -1,5 +1,5 @@
 import { Suspense, useState } from "react";
-import { NavLink, Outlet } from "react-router-dom";
+import { NavLink, Outlet, useLocation } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { ClipboardList, ExternalLink, FileQuestion, FileSpreadsheet, Gamepad2, Gift, Loader2, Shield, Users } from "lucide-react";
 import PageHeader from "@/components/ui/PageHeader";
@@ -15,6 +15,7 @@ import { testerApi } from "@/tester/api";
 export default function AdminLayout() {
   const { t } = useUiCopy();
   const { user } = useAuth();
+  const { pathname } = useLocation();
   const toast = useToast();
   const [exporting, setExporting] = useState(false);
   const canTester = hasPermission(user, "tester.manage");
@@ -25,13 +26,18 @@ export default function AdminLayout() {
     staleTime: 60_000,
   });
 
-  const tabs: Array<{ to: string; label: string; icon: typeof Users; badge?: number }> = [
+  const tabs: Array<{ to: string; label: string; icon: typeof Users; badge?: number; also?: string[] }> = [
     user?.isPanelAdmin
       ? { to: "/admin/users", label: t("Người dùng & phân quyền", "Users & permissions"), icon: Users }
       : { to: "/admin/testers", label: "Testers", icon: Gamepad2 },
     ...(canTester
       ? [
-          { to: "/admin/test-campaigns", label: t("Đợt test", "Test campaigns"), icon: ClipboardList },
+          {
+            to: "/admin/test-campaigns",
+            label: t("Game test", "Game tests"),
+            icon: ClipboardList,
+            also: ["/admin/test-templates", "/admin/test-settings"],
+          },
           {
             to: "/admin/tester-benefits",
             label: t("Benefit tester", "Tester benefits"),
@@ -86,7 +92,7 @@ export default function AdminLayout() {
             className={({ isActive }) =>
               cn(
                 "-mb-px inline-flex shrink-0 items-center gap-1.5 border-b-2 px-4 py-2.5 text-sm font-medium transition-colors",
-                isActive
+                isActive || tab.also?.some((p) => pathname.startsWith(p))
                   ? "border-primary text-primary"
                   : "border-transparent text-muted-foreground hover:text-foreground",
               )

@@ -92,6 +92,10 @@ export interface TesterMe {
 
 export interface TesterTest {
   id: string;
+  /** Trạng thái lời mời / tham gia (Test Game); chỉ có ở hồ sơ admin. */
+  status?: string;
+  reviewStatus?: "pending" | "approved" | "rejected" | null;
+  submittedAt?: string | null;
   completed: boolean;
   completedAt: string | null;
   workloadHours: number;
@@ -200,6 +204,8 @@ export interface AdminTesterRow {
   weeklyPlayLabel: string | null;
   testTimeLabel: string | null;
   payTier: string | null;
+  /** in_team | staff | collab — quyết định game test bảo mật nào được mời. */
+  testerType: string | null;
   active: boolean;
   scoringStatus: string;
   scores: Record<string, number>;
@@ -212,52 +218,6 @@ export interface AdminTesterDetail extends AdminTesterRow {
   genreScores: Array<TesterGenreScore & { rawText: string; source: string; matchedGames: string[] }>;
   assignments: TesterTest[];
   redemptions: BenefitRedemption[];
-}
-
-export interface TestCampaign {
-  id: string;
-  gameName: string;
-  appId: number | null;
-  iconUrl?: string | null;
-  genre: string | null;
-  platform: string | null;
-  mainTags: string[];
-  secondaryTags: string[];
-  workloadHours: number;
-  startDate: string | null;
-  endDate: string | null;
-  team: string | null;
-  status: "planned" | "running" | "done" | "cancelled";
-  result: "suitable" | "unsuitable" | null;
-  resultNote: string | null;
-  assignedCount: number;
-  completedCount: number;
-}
-
-export interface CampaignAssignment {
-  id: string;
-  userId: string;
-  name: string;
-  email: string;
-  workloadHours: number;
-  completed: boolean;
-  completedAt: string | null;
-}
-
-export interface TestCampaignDetail extends TestCampaign {
-  assignments: CampaignAssignment[];
-}
-
-export interface TesterRecommendation {
-  userId: string;
-  name: string;
-  email: string;
-  score: number;
-  favorite: boolean;
-  platforms: string[];
-  activeTests: number;
-  testTimeLabel: string | null;
-  assigned: boolean;
 }
 
 export interface TesterPublicInfo {
