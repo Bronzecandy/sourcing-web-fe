@@ -580,6 +580,8 @@ export interface TesterSurveyForm {
   questions: TemplateQuestion[];
   tags: TagDef[];
   answers: Answers;
+  /** Lần lưu câu trả lời gần nhất trên hệ thống (nháp hoặc nộp). */
+  answersUpdatedAt: string | null;
   evidence: TestFileDto[];
   footage: TestFileDto[];
   evidenceMax: number;

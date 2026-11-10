@@ -34,8 +34,9 @@ async function unwrap<T>(p: Promise<{ data: Envelope<T> }>): Promise<T> {
     if (!data.success) throw new TesterApiError(data.error || "Lỗi Test Game", data.issues ?? []);
     return data.data as T;
   } catch (err) {
-    const res = (err as { response?: { data?: Envelope<T> } }).response?.data;
-    if (res && res.success === false) throw new TesterApiError(res.error || "Lỗi Test Game", res.issues ?? []);
+    const response = (err as { response?: { status?: number; data?: Envelope<T> } }).response;
+    const res = response?.data;
+    if (res && res.success === false) throw new TesterApiError(res.error || "Lỗi Test Game", res.issues ?? [], response?.status);
     throw err;
   }
 }

@@ -25,7 +25,6 @@ import {
 } from "lucide-react";
 import { useToast } from "@/components/ui/Toast";
 import { cn } from "@/lib/utils";
-import { TesterApiError } from "@/tester/api";
 import PageHero, { PageBody } from "@/tester/components/PageHero";
 import Reveal from "@/tester/components/Reveal";
 import { card, ctaYellow, ghostOnDark, ghostOnLight } from "@/tester/components/styles";
@@ -33,7 +32,7 @@ import { testFileUrl, testGameApi } from "../api";
 import { formatBytes, viDate, viDateTime } from "../labels";
 import type { TesterTestGame as TestGame } from "../types";
 import { Chip, CopyButton, GameIcon, LoadError, ReviewResult, RichText, RoundBadge, StatusPill } from "./ui";
-import { countdownText, dateRange, daysUntil, errorText, fieldClass, isJoined, surveyPath, viDay } from "./utils";
+import { countdownText, dateRange, daysUntil, errorText, fieldClass, isJoined, retryLoad, surveyPath, viDay } from "./utils";
 
 export default function TesterTestGame() {
   const { id = "" } = useParams<{ id: string }>();
@@ -41,7 +40,7 @@ export default function TesterTestGame() {
     queryKey: ["testgame-test", id],
     queryFn: () => testGameApi.test(id),
     enabled: Boolean(id),
-    retry: (count, err) => !(err instanceof TesterApiError) && count < 2,
+    retry: retryLoad,
   });
 
   const back = (

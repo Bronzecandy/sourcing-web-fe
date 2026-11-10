@@ -497,7 +497,8 @@ export default function ReportTab({ campaignId, campaignStatus }: { campaignId: 
         }
       >
         <p className="text-sm text-muted-foreground">
-          Game test quay về Testing (nếu chưa hết ngày test) hoặc Reporting. Decision hiện tại được giữ nguyên; cần chốt lại để game test về Done.
+          Game test quay về Testing (nếu chưa hết ngày test) hoặc Reporting. Decision vẫn giữ trong report để chọn sẵn khi chốt lại, nhưng Radar
+          sẽ không hiện kết quả test cho tới khi chốt lại và game test về Done.
         </p>
       </Modal>
     </div>

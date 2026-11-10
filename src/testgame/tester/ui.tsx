@@ -4,10 +4,9 @@ import { ArrowRight, CheckCircle2, Clock, Copy, Gamepad2, Hourglass, LogIn, Rota
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/components/ui/Toast";
 import { cn } from "@/lib/utils";
-import { TesterApiError } from "@/tester/api";
 import { card, ctaYellow, ghostOnLight, TESTER_LOGIN_URL } from "@/tester/components/styles";
 import type { TesterTestGame } from "../types";
-import { ACTION_TONE, errorText, surveyPath, TONE_CLASS, viDay } from "./utils";
+import { ACTION_TONE, errorText, isNotInvited, surveyPath, TONE_CLASS, viDay } from "./utils";
 
 export function GameIcon({ url, className }: { url: string | null; className?: string }) {
   const [broken, setBroken] = useState(false);
@@ -127,7 +126,7 @@ export function LoadError({
   accountHint?: boolean;
 }) {
   const { user, logout } = useAuth();
-  const wrongAccount = accountHint && error instanceof TesterApiError && Boolean(user);
+  const wrongAccount = accountHint && isNotInvited(error) && Boolean(user);
   return (
     <div className={cn(card, "mx-auto max-w-2xl space-y-5 p-6 text-center sm:p-8")}>
       <span className="mx-auto inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-brand-magenta/10 text-brand-magenta">

@@ -6,6 +6,7 @@ import Tabs from "@/components/ui/Tabs";
 import { useToast } from "@/components/ui/Toast";
 import { cn } from "@/lib/utils";
 import { btnGhost, btnPrimary, btnSubtle } from "@/lib/button-classes";
+import { TesterApiError } from "@/tester/api";
 import { testGameAdminApi } from "../api";
 import { viDate, viDateTime } from "../labels";
 import type { BotStatus, ConfigLibraryRow, SchedulerRun, TestGameSettings } from "../types";
@@ -26,7 +27,10 @@ import { useUnsavedWarning } from "./templates-model";
 
 const input = "w-full px-3 py-2 rounded-lg border border-border bg-background text-sm";
 
-const errorText = (err: unknown, fallback: string) => (err instanceof Error && err.message ? err.message : fallback);
+const errorText = (err: unknown, fallback: string) => {
+  if (err instanceof TesterApiError && err.issues.length > 0) return `${err.message}: ${err.issues.join(" · ")}`;
+  return err instanceof Error && err.message ? err.message : fallback;
+};
 
 type SettingsData = Awaited<ReturnType<typeof testGameAdminApi.settings>>;
 type Tab = "config" | "mail";
@@ -170,7 +174,7 @@ function SettingsForm({ data, checking, onRecheck }: { data: SettingsData; check
       const sent = Object.values(r.mails).reduce((s, n) => s + n, 0);
       toast.success(`Đã chạy lịch: ${r.campaigns} game test, gửi ${sent} mail${r.failed > 0 ? `, ${r.failed} mail lỗi` : ""}`);
     },
-    onError: (err) => toast.error(errorText(err, "Không chạy được lịch (có thể lịch đang chạy)")),
+    onError: (err) => toast.error(errorText(err, "Không chạy được lịch")),
   });
 
   const runNow = () => {

@@ -109,6 +109,17 @@ export function errorIssues(err: unknown): string[] {
   return err instanceof TesterApiError ? err.issues : [];
 }
 
+/** BE trả 404 khi tài khoản đang đăng nhập không phải email nhận lời mời. */
+export function isNotInvited(err: unknown): boolean {
+  return err instanceof TesterApiError && err.status === 404;
+}
+
+/** Thử lại tối đa 2 lần với lỗi mạng / lỗi máy chủ; lỗi nghiệp vụ (4xx) thì không. */
+export function retryLoad(count: number, err: unknown): boolean {
+  if (count >= 2) return false;
+  return !(err instanceof TesterApiError) || (err.status ?? 0) >= 500;
+}
+
 /* ---------------- Questionnaire ---------------- */
 
 /** Phải khớp `isVisible` ở BE: câu Điểm / Lý do của tag có câu Điều kiện chỉ hiện khi trả lời Có. */

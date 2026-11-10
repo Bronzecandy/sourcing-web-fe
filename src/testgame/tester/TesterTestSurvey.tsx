@@ -4,7 +4,6 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { ArrowLeft, History, Loader2, Lock, PartyPopper, Save, Send, TriangleAlert } from "lucide-react";
 import { useToast } from "@/components/ui/Toast";
 import { cn } from "@/lib/utils";
-import { TesterApiError } from "@/tester/api";
 import PageHero, { PageBody } from "@/tester/components/PageHero";
 import Reveal from "@/tester/components/Reveal";
 import { card, ctaYellow, ghostOnDark, ghostOnLight } from "@/tester/components/styles";
@@ -27,6 +26,7 @@ import {
   isRequired,
   isVisible,
   readDraft,
+  retryLoad,
   testPath,
   toPayload,
   viTime,
@@ -43,7 +43,7 @@ export default function TesterTestSurvey() {
     queryFn: () => testGameApi.survey(id),
     enabled: Boolean(id),
     refetchOnWindowFocus: false,
-    retry: (count, err) => !(err instanceof TesterApiError) && count < 2,
+    retry: retryLoad,
   });
 
   const back = (
@@ -134,8 +134,11 @@ function SurveyEditor({ id, form }: { id: string; form: TesterSurveyForm }) {
 
   const [initial] = useState((): { answers: Answers; restoredAt: number | null } => {
     const local = editable ? readDraft(id) : null;
-    const submittedAt = t.submittedAt ? Date.parse(t.submittedAt) : 0;
-    if (local && local.savedAt > submittedAt) return { answers: local.answers, restoredAt: local.savedAt };
+    const serverAt = Math.max(
+      t.submittedAt ? Date.parse(t.submittedAt) : 0,
+      form.answersUpdatedAt ? Date.parse(form.answersUpdatedAt) : 0,
+    );
+    if (local && local.savedAt > serverAt) return { answers: local.answers, restoredAt: local.savedAt };
     return { answers: form.answers ?? {}, restoredAt: null };
   });
   const [answers, setAnswers] = useState<Answers>(initial.answers);
