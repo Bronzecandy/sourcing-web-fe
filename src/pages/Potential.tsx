@@ -5,7 +5,7 @@ import {
   RadarChart, Radar, PolarGrid, PolarAngleAxis, PolarRadiusAxis,
   ResponsiveContainer, Tooltip,
 } from "recharts";
-import { TrendingUp, Zap, ArrowUp, Bookmark, ChevronUp, ChevronDown, ArrowUpDown, Rocket } from "lucide-react";
+import { TrendingUp, Zap, ArrowUp, Bookmark, ChevronUp, ChevronDown, ArrowUpDown, Rocket, Telescope } from "lucide-react";
 import { fetchPotentialScores, fetchBreakoutGames, fetchReserveGrowth } from "@/services/api";
 import type { PotentialScore, PotentialSegment } from "@/types";
 import { LaunchBoardTags } from "@/components/LaunchBoardTags";
@@ -14,11 +14,14 @@ import { gameStoreLinks } from "@/lib/store-links";
 import { cn, getScoreColor, getTrendIcon, formatNumber, formatGrowthRatePct } from "@/lib/utils";
 import { formatDelta } from "@/lib/chart-delta";
 import { useUiCopy, potentialRadarMetric } from "@/lib/use-ui-copy";
+import { MarketCell, useMarketSummary } from "@/deep-research/MarketCell";
+import type { MarketSummaryItem } from "@/deep-research/types";
 
 type ReserveSortKey = "growth" | "growthRate";
 type SortDir = "asc" | "desc";
 type TableVariant = "growth" | "stable";
 type BoardView = "reserve-growth" | "reserve-stable" | "launched-growth" | "launched-stable";
+type MarketFilter = "all" | "has_data" | "researched";
 
 const BOARD_OPTIONS: BoardView[] = ["reserve-growth", "reserve-stable", "launched-growth", "launched-stable"];
 
@@ -145,7 +148,25 @@ export default function Potential() {
           "Composite algo v19 — large base & stable chart position",
         );
 
-  const activeTableScores = tableView === "growth" ? growthScores : stableScores;
+  const rankedScores = tableView === "growth" ? growthScores : stableScores;
+  const [marketFilter, setMarketFilter] = useState<MarketFilter>("all");
+  const [marketSort, setMarketSort] = useState(false);
+  const rankedIds = useMemo(() => rankedScores.map((s) => s.appId), [rankedScores]);
+  const market = useMarketSummary(rankedIds);
+  const marketItems = market.data?.items;
+  const activeTableScores = useMemo(() => {
+    const item = (id: number) => marketItems?.[String(id)];
+    let list = rankedScores;
+    if (marketFilter === "has_data") list = list.filter((s) => item(s.appId)?.lastMonth);
+    if (marketFilter === "researched") list = list.filter((s) => item(s.appId)?.latestRun);
+    if (marketSort) {
+      const rev = (id: number) => item(id)?.lastMonth?.revenueUsd ?? -1;
+      list = [...list].sort((a, b) => rev(b.appId) - rev(a.appId));
+    }
+    return list;
+  }, [rankedScores, marketItems, marketFilter, marketSort]);
+  const openResearch = (appId: number) =>
+    navigate(`/deep-research/${appId}?days=${days}&platform=${platform}&segment=${selectedSegment}`);
   const tableTitle =
     tableView === "growth"
       ? selectedSegment === "reserve"
@@ -232,7 +253,38 @@ export default function Potential() {
       </div>
 
       <div className="space-y-4">
-        <p className="text-xs text-muted-foreground">{tableSubtitle}</p>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-xs text-muted-foreground">{tableSubtitle}</p>
+          <div className="flex items-center gap-2 text-xs">
+            <span className="text-muted-foreground">Market (Sensor Tower):</span>
+            <div className="flex rounded-lg border border-border overflow-hidden">
+              {(
+                [
+                  ["all", t("Tất cả", "All")],
+                  ["has_data", t("Có số liệu ST", "Has ST data")],
+                  ["researched", t("Đã Deep Research", "Researched")],
+                ] as const
+              ).map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => setMarketFilter(key)}
+                  className={cn(
+                    "px-2.5 py-1 font-medium transition-colors border-r border-border last:border-r-0",
+                    marketFilter === key ? "bg-primary text-primary-foreground" : "bg-card text-muted-foreground hover:bg-muted",
+                  )}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            {market.data && (
+              <span className="text-muted-foreground">
+                {t("tháng", "month")} {market.data.month.slice(5, 7)}/{market.data.month.slice(0, 4)}
+              </span>
+            )}
+          </div>
+        </div>
 
         <PotentialRankingTable
           variant={tableView}
@@ -246,6 +298,11 @@ export default function Potential() {
           selectedAppId={selectedAppId}
           onSelect={pickRow}
           onOpenGame={(id) => navigate(`/game/${id}`)}
+          market={marketItems}
+          marketLoading={market.isLoading}
+          marketSort={marketSort}
+          onToggleMarketSort={() => setMarketSort((v) => !v)}
+          onResearch={openResearch}
           t={t}
         />
 
@@ -265,6 +322,14 @@ export default function Potential() {
                       : t("Đã ra mắt lâu", "Established")}
                 </p>
               </div>
+              <button
+                type="button"
+                onClick={() => openResearch(selected.appId)}
+                className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-primary/30 px-3 py-1.5 text-xs font-medium text-primary hover:bg-primary/10"
+              >
+                <Telescope className="w-4 h-4" />
+                Deep Research
+              </button>
             </div>
             <ResponsiveContainer width="100%" height={220}>
               <RadarChart data={radarData}>
@@ -439,6 +504,11 @@ function PotentialRankingTable({
   selectedAppId,
   onSelect,
   onOpenGame,
+  market,
+  marketLoading,
+  marketSort,
+  onToggleMarketSort,
+  onResearch,
   t,
 }: {
   variant: TableVariant;
@@ -452,6 +522,11 @@ function PotentialRankingTable({
   selectedAppId: number | null;
   onSelect: (appId: number) => void;
   onOpenGame: (appId: number) => void;
+  market: Record<string, MarketSummaryItem> | undefined;
+  marketLoading: boolean;
+  marketSort: boolean;
+  onToggleMarketSort: () => void;
+  onResearch: (appId: number) => void;
   t: (vi: string, en: string) => string;
 }) {
   const isGrowth = variant === "growth";
@@ -508,6 +583,17 @@ function PotentialRankingTable({
                   {t("Điểm", "Score")}
                 </th>
                 <th className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase">{t("Xu hướng", "Trend")}</th>
+                <th className="px-3 py-3 text-left text-xs font-medium text-muted-foreground uppercase">
+                  <button
+                    type="button"
+                    onClick={onToggleMarketSort}
+                    title={t("Sắp xếp theo doanh thu Sensor Tower tháng gần nhất", "Sort by last-month Sensor Tower revenue")}
+                    className={cn("inline-flex items-center gap-1 uppercase hover:text-foreground", marketSort && "text-foreground")}
+                  >
+                    Market (ST)
+                    <SortIcon active={marketSort} dir="desc" />
+                  </button>
+                </th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -591,6 +677,9 @@ function PotentialRankingTable({
                     >
                       {getTrendIcon(s.trend)}
                     </span>
+                  </td>
+                  <td className="px-3 py-2">
+                    <MarketCell item={market?.[String(s.appId)]} loading={marketLoading} onResearch={() => onResearch(s.appId)} t={t} />
                   </td>
                 </tr>
               ))}

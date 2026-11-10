@@ -102,6 +102,7 @@ export function permissionForPath(pathname: string): PermissionKey | null {
   if (pathname.startsWith("/compare")) return "crawl.ranking";
   if (pathname.startsWith("/game/")) return "crawl.game";
   if (pathname.startsWith("/potential")) return "analytics.potential";
+  if (pathname.startsWith("/deep-research")) return "analytics.potential";
   if (pathname.startsWith("/distribution")) return "analytics.distribution";
   if (pathname.startsWith("/ai-analysis")) return "ai.read";
   if (pathname.startsWith("/libraries")) return "libraries.read";

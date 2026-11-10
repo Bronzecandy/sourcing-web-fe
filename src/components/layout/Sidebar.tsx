@@ -10,6 +10,7 @@ import {
   Shield,
   LogOut,
   Gamepad2,
+  Telescope,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
@@ -47,6 +48,12 @@ const NAV_ITEMS: Array<{
     to: "/radar",
     icon: Radar,
     label: "Game Radar",
+    permissions: ["analytics.potential"],
+  },
+  {
+    to: "/deep-research",
+    icon: Telescope,
+    label: "Deep Research",
     permissions: ["analytics.potential"],
   },
   {

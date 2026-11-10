@@ -35,6 +35,8 @@ const AdminTesterBenefits = lazy(() => import("./pages/admin/AdminTesterBenefits
 const AdminTesterSurvey = lazy(() => import("./pages/admin/AdminTesterSurvey"));
 const Distribution = lazy(() => import("./pages/Distribution"));
 const RadarRecap = lazy(() => import("./pages/RadarRecap"));
+const DeepResearchList = lazy(() => import("./deep-research/DeepResearchList"));
+const DeepResearchPage = lazy(() => import("./deep-research/DeepResearchPage"));
 const Compare = lazy(() => import("./pages/Compare"));
 const TesterShell = lazy(() => import("./tester/TesterShell"));
 const TesterLanding = lazy(() => import("./tester/pages/TesterLanding"));
@@ -116,6 +118,8 @@ export default function App() {
                   <Route path="/compare" element={<Compare />} />
                   <Route path="/potential" element={<Potential />} />
                   <Route path="/radar" element={<RadarRecap />} />
+                  <Route path="/deep-research" element={<DeepResearchList />} />
+                  <Route path="/deep-research/:appId" element={<DeepResearchPage />} />
                   <Route path="/distribution" element={<Distribution />} />
                   {/* More specific path first; parent Outlet renders nested child */}
                   <Route path="/ai-analysis" element={<Outlet />}>
