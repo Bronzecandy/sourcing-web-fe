@@ -29,8 +29,10 @@ export default function MailTab({ campaign, onChanged }: { campaign: CampaignDet
   const sendTest = async () => {
     setSendingTest(true);
     try {
-      const r = await testGameAdminApi.mailTest(campaign.id, code);
-      toast.success(r.queued ? "Đã giao bot gửi thử — mail về email của bạn trong khoảng 1 phút" : "Đã gửi thử về email của bạn");
+      const r = await testGameAdminApi.mailTest(campaign.id, code, assignmentId);
+      const as = campaign.assignments.find((a) => a.id === assignmentId);
+      const who = as ? ` (nội dung như gửi cho ${as.name ?? as.email})` : "";
+      toast.success(r.queued ? `Đã giao bot gửi thử${who} — mail về email của bạn trong khoảng 1 phút` : `Đã gửi thử về email của bạn${who}`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Gửi thử lỗi");
     } finally {

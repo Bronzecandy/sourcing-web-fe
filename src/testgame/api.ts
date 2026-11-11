@@ -135,8 +135,9 @@ export const testGameAdminApi = {
 
   mailPreview: (body: { code: string; campaignId?: string | null; assignmentId?: string | null; subject?: string; body?: string }) =>
     unwrap<MailPreview>(api.post(`${A}/mail-preview`, body)),
-  /** Gửi thử về email của Admin đang đăng nhập. */
-  mailTest: (id: string, code: string) => unwrap<{ sent: boolean; queued: boolean }>(api.post(`${A}/campaigns/${id}/mail-test`, { code })),
+  /** Gửi thử về email của Admin đang đăng nhập, điền dữ liệu của tester `assignmentId` (mặc định tester đầu tiên). */
+  mailTest: (id: string, code: string, assignmentId?: string | null) =>
+    unwrap<{ sent: boolean; queued: boolean }>(api.post(`${A}/campaigns/${id}/mail-test`, { code, assignmentId: assignmentId || null })),
   mailTemplates: () => unwrap<MailTemplate[]>(api.get(`${A}/mail-templates`)),
   saveMailTemplate: (code: string, body: { subject?: string; body?: string; enabled?: boolean; reset?: boolean }) =>
     unwrap<MailTemplate>(api.patch(`${A}/mail-templates/${code}`, body)),
