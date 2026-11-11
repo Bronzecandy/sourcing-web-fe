@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { ExternalLink, Loader2, Search, X } from "lucide-react";
+import { ChevronDown, ExternalLink, Loader2, Search, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { btnGhost } from "@/lib/button-classes";
 import { testerApi } from "@/tester/api";
@@ -17,6 +17,19 @@ function compact(n: number | null): string | null {
 
 function looksLikeId(q: string): boolean {
   return /^\d+$/.test(q) || /\/app\/\d+/.test(q);
+}
+
+function normalizeTitle(s: string): string {
+  return s.toLowerCase().replace(/[\s·:：\-_'’"]/g, "");
+}
+
+/** TapTap tìm gần đúng (tách từ khoá thành cụm) → tách game có tên chứa đủ từ khoá khỏi game chỉ gần giống. */
+function splitByKeyword(results: CampaignGameOption[], q: string) {
+  const kw = normalizeTitle(q);
+  if (!kw || looksLikeId(q)) return { direct: results, related: [] };
+  const hit = (g: CampaignGameOption) => [g.title, g.titleEn].some((t) => t && normalizeTitle(t).includes(kw));
+  const direct = results.filter(hit);
+  return direct.length ? { direct, related: results.filter((g) => !hit(g)) } : { direct: results, related: [] };
 }
 
 function GameIcon({ url, className }: { url: string | null; className?: string }) {
@@ -40,6 +53,33 @@ function OptionMeta({ g }: { g: CampaignGameOption }) {
   );
 }
 
+function OptionRow({ g, onPick }: { g: CampaignGameOption; onPick: (game: CampaignGameOption) => void }) {
+  return (
+    <li>
+      <button type="button" onClick={() => onPick(g)} className="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-muted/50">
+        <GameIcon url={g.iconUrl} className="h-10 w-10" />
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-sm font-medium">
+            {g.title}
+            {g.titleEn && <span className="text-muted-foreground"> · {g.titleEn}</span>}
+          </span>
+          <OptionMeta g={g} />
+          {g.tagsEn.length > 0 && (
+            <span className="mt-1 flex flex-wrap gap-1">
+              {g.tagsEn.slice(0, 4).map((t) => (
+                <span key={t} className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
+                  {t}
+                </span>
+              ))}
+            </span>
+          )}
+        </span>
+        <span className="shrink-0 text-xs tabular-nums text-muted-foreground">#{g.id}</span>
+      </button>
+    </li>
+  );
+}
+
 /** Ô chọn game trên TapTap (theo tên, link hoặc TapTap ID) cho form đợt test. */
 export default function TapTapGamePicker({
   selected,
@@ -53,6 +93,7 @@ export default function TapTapGamePicker({
   const [query, setQuery] = useState("");
   const [debounced, setDebounced] = useState("");
   const [open, setOpen] = useState(false);
+  const [relatedOpenFor, setRelatedOpenFor] = useState<string | null>(null);
 
   useEffect(() => {
     const t = setTimeout(() => setDebounced(query.trim()), 400);
@@ -93,6 +134,13 @@ export default function TapTapGamePicker({
   }
 
   const results = search.data ?? [];
+  const { direct, related } = splitByKeyword(results, debounced);
+  const showRelated = relatedOpenFor === debounced;
+  const pick = (g: CampaignGameOption) => {
+    onPick(g);
+    setOpen(false);
+    setQuery("");
+  };
   return (
     <div className="space-y-2">
       <div className="relative">
@@ -118,38 +166,22 @@ export default function TapTapGamePicker({
             <p className="px-3 py-3 text-sm text-muted-foreground">Không thấy game phù hợp trên TapTap.</p>
           ) : (
             <ul className="divide-y divide-border">
-              {results.map((g) => (
-                <li key={g.id}>
+              {direct.map((g) => (
+                <OptionRow key={g.id} g={g} onPick={pick} />
+              ))}
+              {related.length > 0 && (
+                <li>
                   <button
                     type="button"
-                    onClick={() => {
-                      onPick(g);
-                      setOpen(false);
-                      setQuery("");
-                    }}
-                    className="flex w-full items-center gap-3 px-3 py-2 text-left hover:bg-muted/50"
+                    onClick={() => setRelatedOpenFor(showRelated ? null : debounced)}
+                    className="flex w-full items-center gap-1.5 bg-muted/30 px-3 py-2 text-left text-xs font-medium text-muted-foreground hover:bg-muted/50"
                   >
-                    <GameIcon url={g.iconUrl} className="h-10 w-10" />
-                    <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-medium">
-                        {g.title}
-                        {g.titleEn && <span className="text-muted-foreground"> · {g.titleEn}</span>}
-                      </span>
-                      <OptionMeta g={g} />
-                      {g.tagsEn.length > 0 && (
-                        <span className="mt-1 flex flex-wrap gap-1">
-                          {g.tagsEn.slice(0, 4).map((t) => (
-                            <span key={t} className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">
-                              {t}
-                            </span>
-                          ))}
-                        </span>
-                      )}
-                    </span>
-                    <span className="shrink-0 text-xs tabular-nums text-muted-foreground">#{g.id}</span>
+                    <ChevronDown className={cn("h-3.5 w-3.5 transition-transform", showRelated && "rotate-180")} />
+                    Game liên quan ({related.length}) — TapTap gợi ý, tên không chứa đủ từ khoá
                   </button>
                 </li>
-              ))}
+              )}
+              {showRelated && related.map((g) => <OptionRow key={g.id} g={g} onPick={pick} />)}
             </ul>
           )}
         </div>
