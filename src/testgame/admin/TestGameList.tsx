@@ -221,7 +221,7 @@ export default function TestGameList() {
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
                         {c.iconUrl ? (
-                          <img src={c.iconUrl} alt="" loading="lazy" className="h-10 w-10 shrink-0 rounded-lg bg-muted object-cover" />
+                          <img src={c.iconUrl} alt="" loading="lazy" referrerPolicy="no-referrer" className="h-10 w-10 shrink-0 rounded-lg bg-muted object-cover" />
                         ) : (
                           <span className="h-10 w-10 shrink-0 rounded-lg bg-muted" />
                         )}

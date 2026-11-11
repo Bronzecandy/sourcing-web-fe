@@ -531,7 +531,7 @@ export default function TesterTab({ campaign, onChanged }: { campaign: CampaignD
                     <tr key={a.id} className="hover:bg-muted/20">
                       <td className="px-3 py-2.5">
                         <div className="flex items-center gap-2">
-                          {a.avatarUrl ? <img src={a.avatarUrl} alt="" className="h-8 w-8 rounded-full" /> : <span className="h-8 w-8 rounded-full bg-muted" />}
+                          {a.avatarUrl ? <img src={a.avatarUrl} alt="" referrerPolicy="no-referrer" className="h-8 w-8 rounded-full" /> : <span className="h-8 w-8 rounded-full bg-muted" />}
                           <div className="min-w-0">
                             <p className="truncate font-medium">{a.name ?? a.email.split("@")[0]}</p>
                             <p className="truncate text-xs text-muted-foreground">

@@ -254,7 +254,7 @@ function PreviousPicker({ onPick }: { onPick: (c: CampaignOption) => void }) {
           options.data!.map((c) => (
             <li key={c.id}>
               <button type="button" onClick={() => onPick(c)} className="flex w-full items-center gap-3 px-3 py-2 text-left text-sm hover:bg-muted">
-                {c.iconUrl ? <img src={c.iconUrl} alt="" className="h-8 w-8 rounded-lg object-cover" /> : <span className="h-8 w-8 rounded-lg bg-muted" />}
+                {c.iconUrl ? <img src={c.iconUrl} alt="" referrerPolicy="no-referrer" className="h-8 w-8 rounded-lg object-cover" /> : <span className="h-8 w-8 rounded-lg bg-muted" />}
                 <span className="min-w-0 flex-1">
                   <span className="block truncate font-medium">
                     {c.gameName} <span className="text-muted-foreground">· Lần {c.testRound}</span>

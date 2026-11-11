@@ -581,7 +581,7 @@ export default function TestGameDetail() {
 
       <div className="flex flex-wrap items-start gap-4">
         {c.iconUrl ? (
-          <img src={c.iconUrl} alt="" className="h-14 w-14 rounded-xl border border-border object-cover" />
+          <img src={c.iconUrl} alt="" referrerPolicy="no-referrer" className="h-14 w-14 rounded-xl border border-border object-cover" />
         ) : (
           <span className="flex h-14 w-14 items-center justify-center rounded-xl bg-muted">
             <Gamepad2 className="h-6 w-6 text-muted-foreground" />

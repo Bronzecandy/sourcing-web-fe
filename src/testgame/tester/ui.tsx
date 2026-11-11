@@ -22,6 +22,7 @@ export function GameIcon({ url, className }: { url: string | null; className?: s
       src={url}
       alt=""
       loading="lazy"
+      referrerPolicy="no-referrer"
       onError={() => setBroken(true)}
       className={cn("shrink-0 rounded-2xl bg-white object-cover", className)}
     />

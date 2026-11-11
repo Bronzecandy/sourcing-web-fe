@@ -21,7 +21,7 @@ function looksLikeId(q: string): boolean {
 
 function GameIcon({ url, className }: { url: string | null; className?: string }) {
   return url ? (
-    <img src={url} alt="" loading="lazy" className={cn("shrink-0 rounded-lg bg-muted object-cover", className)} />
+    <img src={url} alt="" loading="lazy" referrerPolicy="no-referrer" className={cn("shrink-0 rounded-lg bg-muted object-cover", className)} />
   ) : (
     <span className={cn("shrink-0 rounded-lg bg-muted", className)} />
   );
