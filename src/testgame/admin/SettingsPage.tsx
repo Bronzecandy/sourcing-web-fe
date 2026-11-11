@@ -370,10 +370,16 @@ function SettingsForm({ data, checking, onRecheck }: { data: SettingsData; check
   );
 }
 
-const TRANSPORT_LABEL: Record<NonNullable<BotStatus["transport"]>, string> = {
-  apps_script: "Apps Script (Gmail của bot)",
-  smtp: "Gmail SMTP (App Password)",
-};
+function mailLine(bot: BotStatus): { ok: boolean; value: string } {
+  if (bot.transport === "smtp") return { ok: true, value: "Gmail SMTP (App Password)" };
+  if (bot.transport === "relay") return bot.online ? { ok: true, value: "Bot Apps Script (Gmail của bot)" } : { ok: false, value: "Bot chưa hoạt động — mail chờ trong hàng" };
+  return { ok: false, value: "Chưa cấu hình" };
+}
+
+function driveLine(bot: BotStatus): string {
+  if (bot.transport === "relay") return bot.online ? "Tạo và chia sẻ folder được" : "Chờ bot hoạt động";
+  return bot.transport === "smtp" ? "Không có (SMTP chỉ gửi mail)" : "Chưa kết nối";
+}
 
 function StatusLine({ ok, label, value }: { ok: boolean; label: string; value: string }) {
   return (
@@ -388,13 +394,13 @@ function StatusLine({ ok, label, value }: { ok: boolean; label: string; value: s
 }
 
 function BotStatusCard({ bot, checking, onRecheck }: { bot: BotStatus; checking: boolean; onRecheck: () => void }) {
-  const mailOk = bot.transport != null && !(bot.transport === "apps_script" && bot.error);
-  const driveOk = bot.drive;
+  const mail = mailLine(bot);
+  const driveOk = bot.transport === "relay" && Boolean(bot.online);
   return (
     <Card
       icon={<Send className="h-4 w-4" />}
       title="Kết nối gửi mail & Drive"
-      description="Mail tự động và folder cài đặt game do bot dưới tài khoản testgame@garena.vn xử lý."
+      description="Mail tự động và folder cài đặt game do bot Apps Script dưới tài khoản testgame@garena.vn xử lý; bot nhận việc mỗi phút nên mail đi sau tối đa khoảng 1 phút."
       actions={
         <button type="button" disabled={checking} onClick={onRecheck} className={cn(btnGhost, "px-3 py-1.5 text-xs")}>
           <RefreshCw className={cn("h-3.5 w-3.5", checking && "animate-spin")} /> Kiểm tra lại
@@ -402,12 +408,8 @@ function BotStatusCard({ bot, checking, onRecheck }: { bot: BotStatus; checking:
       }
     >
       <div className="grid gap-3 text-sm sm:grid-cols-2">
-        <StatusLine ok={mailOk} label="Gửi mail" value={bot.transport ? TRANSPORT_LABEL[bot.transport] : "Chưa cấu hình"} />
-        <StatusLine
-          ok={driveOk}
-          label="Google Drive"
-          value={driveOk ? "Tạo và chia sẻ folder được" : bot.transport === "smtp" ? "Không có (SMTP chỉ gửi mail)" : "Chưa kết nối"}
-        />
+        <StatusLine ok={mail.ok} label="Gửi mail" value={mail.value} />
+        <StatusLine ok={driveOk} label="Google Drive" value={driveLine(bot)} />
         <div>
           <p className="text-xs text-muted-foreground">Tài khoản bot</p>
           <p className="font-medium">{bot.account ?? "—"}</p>
@@ -416,32 +418,40 @@ function BotStatusCard({ bot, checking, onRecheck }: { bot: BotStatus; checking:
           <p className="text-xs text-muted-foreground">Quota mail còn lại hôm nay</p>
           <p className="font-medium tabular-nums">{bot.quota ?? "—"}</p>
         </div>
+        {bot.transport === "relay" && (
+          <>
+            <div>
+              <p className="text-xs text-muted-foreground">Bot ghé trạm gần nhất</p>
+              <p className="font-medium">{bot.lastPollAt ? viDateTime(bot.lastPollAt) : "Chưa ghé lần nào"}</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground">Việc đang chờ bot</p>
+              <p className="font-medium tabular-nums">{bot.pending ?? "—"}</p>
+            </div>
+          </>
+        )}
       </div>
-      {bot.error && (
-        <p className="rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive">
-          Lỗi khi gọi Apps Script: {bot.error}
-        </p>
-      )}
-      {(!mailOk || !driveOk) && (
+      {bot.error && <p className="rounded-lg border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive">{bot.error}</p>}
+      {(!mail.ok || !driveOk) && (
         <div className="rounded-lg border border-amber-200 bg-amber-50/60 p-4 text-sm">
           <p className="font-medium">Cài bot Apps Script</p>
           <ol className="mt-2 list-decimal space-y-1.5 pl-5 text-xs">
             <li>
-              Đăng nhập <span className="font-medium">testgame@garena.vn</span> → script.google.com → New project → dán toàn bộ file{" "}
-              <code>be/scripts/apps-script/testgame-bot.gs</code>.
+              Đăng nhập <span className="font-medium">testgame@garena.vn</span> (nên dùng cửa sổ ẩn danh chỉ có tài khoản này) → script.google.com →
+              New project → dán toàn bộ file <code>be/scripts/apps-script/testgame-bot.gs</code> → Save.
             </li>
             <li>
-              Project Settings → Script Properties → thêm <code>SECRET</code> = chuỗi ngẫu nhiên dài (≥ 32 ký tự).
+              Project Settings → Script Properties → thêm <code>SECRET</code> = chuỗi trùng <code>BOT_SECRET</code> của trạm{" "}
+              <code>taptap-proxy</code> trên VM data.
             </li>
             <li>
-              Deploy → New deployment → Web app: Execute as <span className="font-medium">Me</span>, Who has access{" "}
-              <span className="font-medium">Anyone</span>. Lần đầu chạy, cho phép quyền Gmail + Drive.
+              Chọn hàm <code>setup</code> → Run → Review permissions → Allow (Gmail, Drive, gọi URL ngoài, trigger). Hàm tạo trigger chạy{" "}
+              <code>poll</code> mỗi phút.
             </li>
             <li>
-              Trên server BE đặt env <code>TESTGAME_APPS_SCRIPT_URL</code> = URL kết thúc bằng <code>/exec</code> và{" "}
-              <code>TESTGAME_APPS_SCRIPT_SECRET</code> = SECRET ở bước 2, rồi khởi động lại BE.
+              Không cần Deploy web app. BE cần env <code>TESTGAME_BOT_RELAY_URL</code> (trạm, vd https://market-data.garena.vn/taptap-proxy); sửa code
+              script sau này chỉ cần Save.
             </li>
-            <li>Sửa code script sau này: Deploy → Manage deployments → Edit → Version: New version (giữ nguyên URL).</li>
           </ol>
           <p className="mt-2 text-xs text-muted-foreground">
             Cách khác, chỉ gửi mail (không tạo / chia sẻ folder Drive): đặt <code>TESTGAME_SMTP_USER</code> và{" "}

@@ -556,10 +556,15 @@ export default function TesterTab({ campaign, onChanged }: { campaign: CampaignD
                             Mail lỗi: {failedMail.map((m) => m.code).join(", ")}
                           </p>
                         )}
-                        {a.driveShare && a.driveShare !== "ok" && (
-                          <p className="text-amber-700" title={a.driveShare}>
-                            Chưa share được folder Drive
-                          </p>
+                        {a.driveShare === "pending" ? (
+                          <p className="text-muted-foreground">Bot đang share folder Drive…</p>
+                        ) : (
+                          a.driveShare &&
+                          a.driveShare !== "ok" && (
+                            <p className="text-amber-700" title={a.driveShare}>
+                              Chưa share được folder Drive
+                            </p>
+                          )
                         )}
                       </td>
                       <td className="px-3 py-2.5 text-xs">

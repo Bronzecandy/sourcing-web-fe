@@ -122,8 +122,8 @@ export default function AuditTab({ campaignId }: { campaignId: string }) {
                     {m.trigger !== "auto" && <span className="ml-1 rounded bg-muted px-1">{m.trigger === "test" ? "thử" : "tay"}</span>}
                   </td>
                   <td className="px-3 py-2">{m.toEmail}</td>
-                  <td className={cn("px-3 py-2", m.status === "failed" && "text-destructive")} title={m.error ?? undefined}>
-                    {m.status === "sent" ? "Đã gửi" : `Lỗi${m.attempts > 1 ? ` (${m.attempts} lần)` : ""}`}
+                  <td className={cn("px-3 py-2", m.status === "failed" && "text-destructive", m.status === "queued" && "text-muted-foreground")} title={m.error ?? undefined}>
+                    {m.status === "sent" ? "Đã gửi" : m.status === "queued" ? "Đang chờ bot gửi" : `Lỗi${m.attempts > 1 ? ` (${m.attempts} lần)` : ""}`}
                   </td>
                 </tr>
               ))}

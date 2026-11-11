@@ -59,12 +59,21 @@ export interface QuestionTemplate {
 }
 
 export interface BotStatus {
-  transport: "apps_script" | "smtp" | null;
+  /** relay = bot Apps Script nhận việc qua trạm trên VM data */
+  transport: "relay" | "smtp" | null;
   drive: boolean;
-  account?: string;
-  quota?: number;
+  /** Bot ghé trạm trong 3 phút gần nhất */
+  online?: boolean;
+  account?: string | null;
+  quota?: number | null;
+  lastPollAt?: string | null;
+  /** Việc trên trạm chưa có kết quả */
+  pending?: number;
   error?: string;
 }
+
+/** queued = đã giao bot, chờ bot báo kết quả. */
+export type MailStatus = "queued" | "sent" | "failed";
 
 export interface TestGameMeta {
   genres: Array<{ key: string; label: string; workloadGroup: string | null }>;
@@ -162,7 +171,7 @@ export interface EvidenceReview {
 
 export interface AssignmentMail {
   code: string;
-  status: "sent" | "failed";
+  status: MailStatus;
   error: string | null;
   sentAt: string;
   trigger: "auto" | "manual" | "test";
@@ -193,6 +202,7 @@ export interface CampaignAssignment {
   aiReview: EvidenceReview | { error: string } | null;
   aiReviewAt: string | null;
   whitelistInfo: string | null;
+  /** ok | pending (bot đang share) | lỗi share */
   driveShare: string | null;
   note: string | null;
   /** Câu trả lời questionnaire (bản nháp khi đang test, bản nộp khi đã nộp). */
@@ -238,6 +248,8 @@ export interface CampaignDetail extends CampaignSummary {
   footageRequired: boolean;
   apkFolderUrl: string | null;
   apkFolderError: string | null;
+  /** Bot đang tạo folder Drive */
+  apkFolderPending: boolean;
   coordinatorEmail: string | null;
   team: string | null;
   conclusion: string | null;
@@ -352,7 +364,7 @@ export interface MailLogEntry {
   code: string;
   toEmail: string;
   subject: string;
-  status: "sent" | "failed";
+  status: MailStatus;
   error: string | null;
   attempts: number;
   trigger: "auto" | "manual" | "test";

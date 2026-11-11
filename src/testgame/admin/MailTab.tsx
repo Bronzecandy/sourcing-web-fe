@@ -1,16 +1,17 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
-import { CheckCircle2, Loader2, Paperclip, Send, XCircle } from "lucide-react";
+import { CheckCircle2, Clock, Loader2, Paperclip, Send, XCircle } from "lucide-react";
 import Modal, { ModalFooterActions } from "@/components/ui/Modal";
 import { useToast } from "@/components/ui/Toast";
 import { cn } from "@/lib/utils";
 import { btnGhost } from "@/lib/button-classes";
 import { testGameAdminApi } from "../api";
 import { MAIL_LABEL, viDate, viDateTime } from "../labels";
-import type { CampaignAssignment, CampaignDetail } from "../types";
+import type { CampaignAssignment, CampaignDetail, MailStatus } from "../types";
 
 const CODES = ["M1", "M2", "M3", "M4", "M5", "M6", "M7"];
+const MAIL_STATUS_TEXT: Record<MailStatus, string> = { sent: "Đã gửi", queued: "Đang chờ bot gửi, giao lúc", failed: "Lỗi" };
 
 export default function MailTab({ campaign, onChanged }: { campaign: CampaignDetail; onChanged: (c: CampaignDetail) => void }) {
   const toast = useToast();
@@ -28,8 +29,8 @@ export default function MailTab({ campaign, onChanged }: { campaign: CampaignDet
   const sendTest = async () => {
     setSendingTest(true);
     try {
-      await testGameAdminApi.mailTest(campaign.id, code);
-      toast.success("Đã gửi thử về email của bạn");
+      const r = await testGameAdminApi.mailTest(campaign.id, code);
+      toast.success(r.queued ? "Đã giao bot gửi thử — mail về email của bạn trong khoảng 1 phút" : "Đã gửi thử về email của bạn");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Gửi thử lỗi");
     } finally {
@@ -41,8 +42,14 @@ export default function MailTab({ campaign, onChanged }: { campaign: CampaignDet
     if (!resend) return;
     setResending(true);
     try {
-      onChanged(await testGameAdminApi.resendMail(resend.a.id, resend.code));
-      toast.success(`Đã gửi ${resend.code} cho ${resend.a.email}`);
+      const next = await testGameAdminApi.resendMail(resend.a.id, resend.code);
+      onChanged(next);
+      const last = next.assignments.find((x) => x.id === resend.a.id)?.mails.filter((m) => m.code === resend.code).at(-1);
+      toast.success(
+        last?.status === "queued"
+          ? `Đã giao bot gửi ${resend.code} cho ${resend.a.email} — mail đi trong khoảng 1 phút`
+          : `Đã gửi ${resend.code} cho ${resend.a.email}`,
+      );
       setResend(null);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Gửi lỗi");
@@ -103,7 +110,7 @@ export default function MailTab({ campaign, onChanged }: { campaign: CampaignDet
                             className="rounded p-1 hover:bg-muted"
                             title={
                               last
-                                ? `${last.status === "sent" ? "Đã gửi" : "Lỗi"} ${viDateTime(last.sentAt)}${last.error ? `\n${last.error}` : ""}\nBấm để gửi lại`
+                                ? `${MAIL_STATUS_TEXT[last.status]} ${viDateTime(last.sentAt)}${last.error ? `\n${last.error}` : ""}\nBấm để gửi lại`
                                 : "Chưa gửi — bấm để gửi"
                             }
                           >
@@ -111,6 +118,8 @@ export default function MailTab({ campaign, onChanged }: { campaign: CampaignDet
                               <span className="text-muted-foreground/50">·</span>
                             ) : last.status === "sent" ? (
                               <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                            ) : last.status === "queued" ? (
+                              <Clock className="h-4 w-4 text-amber-600" />
                             ) : (
                               <XCircle className="h-4 w-4 text-destructive" />
                             )}

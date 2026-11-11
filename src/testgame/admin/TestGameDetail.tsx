@@ -381,6 +381,10 @@ function Overview({ c, onRefresh, onChanged, meta }: {
               </div>
             ) : c.noTest ? (
               <p className="text-sm text-muted-foreground">Không áp dụng.</p>
+            ) : c.apkFolderPending ? (
+              <p className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 shrink-0 animate-spin" /> Bot đang tạo folder Drive — thường xong trong khoảng 1 phút.
+              </p>
             ) : (
               <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
                 <AlertTriangle className="h-4 w-4 shrink-0" />
@@ -499,7 +503,13 @@ export default function TestGameDetail() {
     queryKey: key,
     queryFn: () => testGameAdminApi.campaign(id),
     enabled: Boolean(id),
-    refetchInterval: (query) => (query.state.data?.assignments.some((a) => a.aiStatus === "queued" || a.aiStatus === "running") ? 5000 : false),
+    refetchInterval: (query) => {
+      const d = query.state.data;
+      if (!d) return false;
+      if (d.assignments.some((a) => a.aiStatus === "queued" || a.aiStatus === "running")) return 5000;
+      const botBusy = d.apkFolderPending || d.assignments.some((a) => a.driveShare === "pending" || a.mails.some((m) => m.status === "queued"));
+      return botBusy ? 15_000 : false;
+    },
   });
   const c = q.data;
 

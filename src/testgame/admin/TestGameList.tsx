@@ -110,10 +110,12 @@ export default function TestGameList() {
         </div>
       </div>
 
-      {meta.data && !meta.data.bot.transport && (
+      {meta.data && (!meta.data.bot.transport || (meta.data.bot.transport === "relay" && !meta.data.bot.online)) && (
         <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-300 bg-amber-50 px-4 py-2.5 text-sm text-amber-900">
           <AlertTriangle className="h-4 w-4 shrink-0" />
-          Chưa kết nối tài khoản gửi mail testgame@garena.vn — lời mời và nhắc nhở sẽ không gửi được.
+          {meta.data.bot.transport
+            ? "Bot gửi mail testgame@garena.vn chưa hoạt động — mail và folder Drive đang chờ trong hàng, sẽ chạy khi bot hoạt động lại."
+            : "Chưa kết nối tài khoản gửi mail testgame@garena.vn — lời mời và nhắc nhở sẽ không gửi được."}
           <Link to="/admin/test-settings" className="font-medium underline">
             Xem hướng dẫn
           </Link>
